@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from partners.models import ClientSite, DonorSite, Placement
+from partners.models import ClientSite, DonorSite, PageTemplate, Placement
 
 
 class PlacementViewTests(TestCase):
@@ -79,3 +79,48 @@ class PlacementViewTests(TestCase):
     def test_anonymous_user_is_redirected(self):
         self.client.logout()
         self.assertEqual(self.client.get(reverse("dashboard")).status_code, 302)
+
+
+class TemplateViewTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user("template-operator", password="test")
+        self.client.force_login(self.user)
+        self.first = PageTemplate.objects.create(name="First", slug="first")
+        self.second = PageTemplate.objects.create(name="Second", slug="second")
+        DonorSite.objects.create(
+            name="D",
+            domain="template-donor.test",
+            admin_url="https://template-donor.test/admin",
+            page_url="https://template-donor.test/p",
+            template=self.second,
+        )
+
+    def test_template_list_contains_all_templates_and_usage_count(self):
+        response = self.client.get(reverse("template-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "First")
+        self.assertContains(response, "Second")
+        second = next(item for item in response.context["templates"] if item.pk == self.second.pk)
+        self.assertEqual(second.donor_count, 1)
+
+    def test_specific_template_can_be_edited_without_touching_first(self):
+        response = self.client.post(
+            reverse("template-edit", args=[self.second.pk]),
+            {
+                "name": "Second updated",
+                "slug": "second",
+                "wrapper_html": self.second.wrapper_html,
+                "item_html": self.second.item_html,
+                "css": ".partners{display:grid}",
+                "include_css_in_article": "on",
+                "enabled": "on",
+                "version": 2,
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.first.refresh_from_db()
+        self.second.refresh_from_db()
+        self.assertEqual(self.first.name, "First")
+        self.assertEqual(self.second.name, "Second updated")
+        self.assertEqual(self.second.version, 2)
+        self.assertTrue(self.second.include_css_in_article)
