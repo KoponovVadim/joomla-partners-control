@@ -3,6 +3,9 @@ from django import forms
 from .models import ClientSite, DonorSite, PageTemplate, Placement
 
 
+MAX_LOGO_SIZE = 8 * 1024 * 1024
+
+
 class StyledModelForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -42,6 +45,21 @@ class DonorForm(StyledModelForm):
 
 
 class ClientForm(StyledModelForm):
+    logo = forms.ImageField(
+        label="Картинка / логотип",
+        required=False,
+        widget=forms.ClearableFileInput(
+            attrs={
+                "accept": "image/jpeg,image/png,image/webp,image/gif",
+                "data-logo-input": "1",
+            }
+        ),
+        help_text=(
+            "Загрузите JPG, PNG, WebP или GIF до 8 МБ. После сохранения JPC сам подставит "
+            "абсолютный URL этой картинки в <img src> при формировании статьи."
+        ),
+    )
+
     class Meta:
         model = ClientSite
         fields = ["name", "domain", "logo", "default_html", "notes", "enabled"]
@@ -49,6 +67,12 @@ class ClientForm(StyledModelForm):
             "default_html": forms.Textarea(attrs={"rows": 14, "class": "input code-editor"}),
             "notes": forms.Textarea(attrs={"rows": 3}),
         }
+
+    def clean_logo(self):
+        logo = self.cleaned_data.get("logo")
+        if logo and getattr(logo, "size", 0) > MAX_LOGO_SIZE:
+            raise forms.ValidationError("Картинка слишком большая. Максимальный размер — 8 МБ.")
+        return logo
 
 
 class PageTemplateForm(StyledModelForm):
@@ -84,3 +108,9 @@ class PlacementForm(StyledModelForm):
             "enabled",
         ]
         widgets = {"html_override": forms.Textarea(attrs={"rows": 12, "class": "input code-editor"})}
+        help_texts = {
+            "image_override": (
+                "Оставьте пустым, чтобы автоматически использовать картинку, загруженную в карточке клиента. "
+                "Заполняйте только если для этого размещения нужен другой URL картинки."
+            )
+        }
