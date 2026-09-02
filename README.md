@@ -10,7 +10,7 @@
 - `partners/joomla/` — отдельные адаптеры Joomla 3/4/5. Joomla 3 поддерживает вход в administrator, чтение, безопасное принятие существующего материала под управление, обновление и создание нового материала. Joomla 4/5 пока возвращают `not_implemented`.
 - `partners/views.py`, Django templates и vanilla JS — защищённый интерфейс, CRUD, переключатели, drag-and-drop и отдельное управление несколькими шаблонами страниц.
 - Django admin доступен как служебный интерфейс `/admin/`.
-- `.github/workflows/tests.yml` запускает Django checks, проверку миграций и тесты на push/PR.
+- `.github/workflows/tests.yml` запускает Django checks, проверку миграций, `collectstatic` и тесты на push/PR.
 
 ## Локальный запуск без Docker
 
@@ -39,7 +39,7 @@ docker compose exec web python manage.py createsuperuser
 docker compose exec web python manage.py seed_demo
 ```
 
-Контейнер запуска ждёт PostgreSQL, выполняет migrations и `collectstatic`, затем запускает Gunicorn на внутреннем `0.0.0.0:8000`. Наружу Compose публикует приложение только на `127.0.0.1:${APP_PORT}`. PostgreSQL наружу не публикуется.
+Контейнер запуска ждёт PostgreSQL, выполняет migrations и `collectstatic`, затем запускает Gunicorn на внутреннем `0.0.0.0:8000`. Наружу Compose публикует приложение только на `127.0.0.1:${APP_PORT}`. PostgreSQL наружу не публикуется. Загруженные логотипы сохраняются в отдельном Docker volume `media_data`.
 
 ### Environment
 
@@ -57,7 +57,9 @@ docker compose exec web python manage.py seed_demo
 
 `scripts/deploy.sh` сохраняет текущий `APP_PORT`, если он свободен или уже принадлежит этому Compose-проекту. При конфликте `scripts/find_free_port.py` проверяет реальный socket bind и выбирает порт из `8100–8999`, записывает его в `.env`, после чего запускает Compose. Reverse proxy направляется на напечатанный `http://127.0.0.1:<порт>`.
 
-Загруженные клиентские логотипы лежат в `MEDIA_ROOT` (`media/client_logos/`). В production reverse proxy должен отдельно отдавать URL `/media/` из этой директории. WhiteNoise используется только для static-файлов и не заменяет раздачу пользовательских media.
+Загруженные клиентские логотипы лежат в `MEDIA_ROOT/client_logos/`. Приложение само публично отдаёт только маршрут `/media/client_logos/...`, в том числе при `DEBUG=0`; остальные файлы из `MEDIA_ROOT` через этот endpoint недоступны. Это позволяет использовать абсолютные URL логотипов непосредственно в HTML, публикуемом на Joomla-донорах, без обязательного отдельного location для media в Nginx. Для большого объёма файлов reverse proxy позже можно настроить на прямую раздачу `/media/client_logos/`.
+
+`STATIC_URL` и `MEDIA_URL` заданы root-relative (`/static/` и `/media/`), поэтому ресурсы корректно работают и на вложенных URL панели.
 
 Обновление:
 
@@ -110,6 +112,7 @@ cat backup.sql | docker compose exec -T db psql -U joomla_partners joomla_partne
 ```bash
 python manage.py check
 python manage.py makemigrations --check --dry-run
+python manage.py collectstatic --noinput
 python manage.py test
 docker compose config
 ```
