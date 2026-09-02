@@ -18,5 +18,37 @@
   </form>
   {% if kind == 'client' %}<aside class="panel live-preview"><div class="section-label">Предпросмотр HTML</div><iframe title="Предпросмотр клиента" sandbox="allow-popups"></iframe><p class="muted small-text">Скрипты отключены изолированным iframe.</p></aside>{% endif %}
 </div>
-{% if kind == 'donor' and object %}<div class="standalone-action actions"><form method="post" action="{% url 'donor-test' object.pk %}">{% csrf_token %}<button class="btn">Проверить подключение</button></form>{% if object.joomla_version == '3' and object.article_id %}<form method="post" action="{% url 'donor-adopt' object.pk %}" data-confirm="Будет сохранена резервная копия HTML и в материал добавится невидимый managed-marker. Продолжить?">{% csrf_token %}<button class="btn">Принять материал под управление</button></form>{% endif %}</div>{% endif %}
+{% if kind == 'donor' and object %}
+<div class="standalone-action actions"><form method="post" action="{% url 'donor-test' object.pk %}">{% csrf_token %}<button class="btn">Проверить подключение</button></form>{% if object.joomla_version == '3' and object.article_id %}<form method="post" action="{% url 'donor-adopt' object.pk %}" data-confirm="Будет сохранена резервная копия HTML и в материал добавится невидимый managed-marker. Продолжить?">{% csrf_token %}<button class="btn">Принять материал под управление</button></form>{% endif %}</div>
+{% if snapshots %}
+<section class="panel source-panel snapshot-history">
+  <div class="panel-head"><h2>История материала</h2><span>Последние {{ snapshots|length }} snapshot</span></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Дата</th><th>Причина</th><th>Материал</th><th>SHA-256</th><th></th></tr></thead>
+      <tbody>
+      {% for snapshot in snapshots %}
+        <tr>
+          <td>{{ snapshot.created_at|date:'d.m.Y H:i:s' }}</td>
+          <td>{{ snapshot.reason }}</td>
+          <td>#{{ snapshot.article_id }}</td>
+          <td><span class="hash">{{ snapshot.body_hash|slice:':12' }}…</span></td>
+          <td>
+            <div class="actions">
+              <a class="btn small" href="{% url 'donor-snapshot' object.pk snapshot.pk %}">Посмотреть</a>
+              {% if object.joomla_version == '3' and object.article_id == snapshot.article_id and snapshot.has_current_managed_marker %}
+              <form method="post" action="{% url 'donor-restore-snapshot' object.pk snapshot.pk %}" data-confirm="Восстановить эту версию материала на Joomla? Перед откатом текущее состояние будет сохранено новым snapshot.">{% csrf_token %}<button class="btn small danger-quiet">Восстановить</button></form>
+              {% else %}
+              <span class="badge muted-badge">только просмотр</span>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endif %}
 {% endblock %}
