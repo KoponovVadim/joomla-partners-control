@@ -1,0 +1,8 @@
+Django==5.2.5
+gunicorn==23.0.0
+psycopg[binary]==3.2.9
+httpx==0.28.1
+beautifulsoup4==4.13.4
+cryptography==45.0.6
+Pillow==11.3.0
+
