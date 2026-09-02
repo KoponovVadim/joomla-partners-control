@@ -6,8 +6,14 @@ from django.core.files.storage import FileSystemStorage
 from django.http import FileResponse, Http404
 
 
+PUBLIC_MEDIA_PREFIX = "client_logos/"
+
+
 def public_media(request, path):
-    """Serve uploaded partner media in production without exposing arbitrary files."""
+    """Serve only uploaded client logos in production."""
+    if not path.startswith(PUBLIC_MEDIA_PREFIX):
+        raise Http404("Media file not found")
+
     storage = FileSystemStorage(location=settings.MEDIA_ROOT, base_url=settings.MEDIA_URL)
     try:
         handle = storage.open(path, "rb")
