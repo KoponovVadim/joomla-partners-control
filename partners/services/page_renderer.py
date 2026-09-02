@@ -40,6 +40,11 @@ def _public_url(value):
 
     public_base_url = getattr(settings, "PUBLIC_BASE_URL", "").strip()
     if not public_base_url:
+        if not settings.DEBUG:
+            raise ValueError(
+                "PUBLIC_BASE_URL не настроен: JPC не может безопасно передать загруженную картинку "
+                "в Joomla как абсолютный URL"
+            )
         return value
     return urljoin(public_base_url.rstrip("/") + "/", value.lstrip("/"))
 

@@ -30,6 +30,22 @@ document.addEventListener('DOMContentLoaded', () => {
       item.addEventListener('dragover', event => { event.preventDefault(); if (dragged !== item) { const box = item.getBoundingClientRect(); list.insertBefore(dragged, event.clientY < box.top + box.height / 2 ? item : item.nextSibling); } });
     });
   });
+
+  const logoInput = document.querySelector('[data-logo-input]');
+  const logoPreview = document.querySelector('[data-logo-preview]');
+  const logoPreviewWrap = document.querySelector('[data-logo-preview-wrap]');
+  if (logoInput && logoPreview && logoPreviewWrap) {
+    let objectUrl = null;
+    logoInput.addEventListener('change', () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      const file = logoInput.files?.[0];
+      if (!file) return;
+      objectUrl = URL.createObjectURL(file);
+      logoPreview.src = objectUrl;
+      logoPreviewWrap.hidden = false;
+    });
+  }
+
   const editor = document.querySelector('[name=default_html]');
   const liveFrame = document.querySelector('.live-preview iframe');
   if (editor && liveFrame) { const update = () => liveFrame.srcdoc = editor.value; editor.addEventListener('input', update); update(); }
@@ -41,4 +57,3 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-source]').forEach(x => x.hidden = x.dataset.source !== button.dataset.sourceTab);
   }));
 });
-
