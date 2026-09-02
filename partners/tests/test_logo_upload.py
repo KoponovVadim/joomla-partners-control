@@ -69,6 +69,17 @@ class DirectLogoUploadTests(TestCase):
             self.assertEqual(media_response.status_code, 200)
             self.assertEqual(media_response["Content-Type"], "image/png")
 
+    @override_settings(PUBLIC_BASE_URL="", DEBUG=False)
+    def test_production_render_stops_if_uploaded_logo_has_no_public_base_url(self):
+        client = ClientSite.objects.create(
+            name="Unsafe relative logo",
+            domain="unsafe-logo.test",
+            logo="client_logos/unsafe.png",
+        )
+        Placement.objects.create(donor=self.donor, client=client, position=1)
+        with self.assertRaisesRegex(ValueError, "PUBLIC_BASE_URL"):
+            render_page(self.donor)
+
     def test_client_form_explains_that_uploaded_logo_is_used_automatically(self):
         client = ClientSite.objects.create(name="Existing", domain="existing-logo.test")
         response = self.client.get(reverse("client-edit", args=[client.pk]))
