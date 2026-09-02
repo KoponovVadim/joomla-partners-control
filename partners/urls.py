@@ -1,5 +1,7 @@
 from django.urls import path
+
 from . import views
+
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
@@ -17,6 +19,8 @@ urlpatterns = [
     path("clients/new/", views.client_edit, name="client-create"),
     path("clients/<int:pk>/edit/", views.client_edit, name="client-edit"),
     path("clients/<int:pk>/archive/", views.client_archive, name="client-archive"),
-    path("templates/", views.template_edit, name="template-edit"),
+    path("templates/", views.template_list, name="template-list"),
+    path("templates/new/", views.template_edit, name="template-create"),
+    path("templates/<int:pk>/edit/", views.template_edit, name="template-edit"),
     path("logs/", views.logs, name="logs"),
 ]
