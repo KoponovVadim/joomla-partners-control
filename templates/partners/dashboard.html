@@ -2,7 +2,7 @@
 {% block content %}
 <section class="workspace-head">
   <div><h1>Партнёрские страницы</h1><p class="muted">Доноры, клиенты и состояние публикаций в одном месте</p></div>
-  <div class="actions"><a class="btn" href="{% url 'template-edit' %}">Шаблон</a><a class="btn" href="{% url 'client-create' %}">+ Клиент</a><a class="btn primary" href="{% url 'donor-create' %}">+ Донор</a></div>
+  <div class="actions"><a class="btn" href="{% url 'template-list' %}">Шаблоны</a><a class="btn" href="{% url 'client-create' %}">+ Клиент</a><a class="btn primary" href="{% url 'donor-create' %}">+ Донор</a></div>
 </section>
 <section class="toolbar">
   <div class="tabs"><a class="tab {% if mode == 'donors' %}active{% endif %}" href="?mode=donors&q={{ query|urlencode }}">Доноры <span>{{ donors|length }}</span></a><a class="tab {% if mode == 'clients' %}active{% endif %}" href="?mode=clients&q={{ query|urlencode }}">Клиенты <span>{{ clients|length }}</span></a></div>
@@ -50,4 +50,3 @@
 </div>
 {% endif %}
 {% endblock %}
-
