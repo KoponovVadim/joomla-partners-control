@@ -78,17 +78,28 @@ def client_edit(request, pk=None):
 
 
 @login_required
-def template_edit(request):
-    template = PageTemplate.objects.order_by("id").first()
+def template_list(request):
+    templates = PageTemplate.objects.annotate(donor_count=Count("donorsite")).order_by("name", "id")
+    return render(request, "partners/template_list.html", {"templates": templates})
+
+
+@login_required
+def template_edit(request, pk=None):
+    template = get_object_or_404(PageTemplate, pk=pk) if pk else None
     form = PageTemplateForm(request.POST or None, instance=template)
     if request.method == "POST" and form.is_valid():
-        form.save()
-        messages.success(request, "Шаблон сохранён.")
-        return redirect("template-edit")
+        saved = form.save()
+        messages.success(request, f"Шаблон «{saved.name}» сохранён.")
+        return redirect("template-list")
     return render(
         request,
         "partners/form.html",
-        {"form": form, "title": "Шаблон страницы", "object": template, "kind": "template"},
+        {
+            "form": form,
+            "title": "Новый шаблон" if not template else f"Шаблон: {template.name}",
+            "object": template,
+            "kind": "template",
+        },
     )
 
 
