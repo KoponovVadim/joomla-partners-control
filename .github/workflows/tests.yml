@@ -1,0 +1,32 @@
+name: tests
+
+on:
+  push:
+    branches: [main, "fix/**", "feat/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  django-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CREDENTIAL_ENCRYPTION_KEY: github-actions-test-key
+      SECRET_KEY: github-actions-secret-key
+      DEBUG: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Django system check
+        run: python manage.py check
+      - name: Check migrations
+        run: python manage.py makemigrations --check --dry-run
+      - name: Collect static files
+        run: python manage.py collectstatic --noinput
+      - name: Run tests
+        run: python manage.py test

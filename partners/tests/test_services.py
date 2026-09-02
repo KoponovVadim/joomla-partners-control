@@ -1,21 +1,54 @@
 import os
+
 from django.test import TestCase, override_settings
+
 from partners.forms import DonorForm
 from partners.models import ClientSite, DonorSite, PageTemplate, Placement
 from partners.services.credentials import decrypt_password, encrypt_password
 from partners.services.page_renderer import has_managed_marker, render_page
 
+
 class RendererTests(TestCase):
     def setUp(self):
-        self.template = PageTemplate.objects.create(name="Test", slug="test-renderer", wrapper_html="<ul>{{ items }}</ul>", item_html='<li><a href="{{ url }}"{{ link_attributes }}><img src="{{ image }}" alt="{{ client_name }}">{{ client_html }}</a></li>', css=".x{}", include_css_in_article=True)
-        self.donor = DonorSite.objects.create(name="Donor", domain="donor.test", admin_url="https://donor.test/administrator/", page_url="https://donor.test/partners", template=self.template)
+        self.template = PageTemplate.objects.create(
+            name="Test",
+            slug="test-renderer",
+            wrapper_html="<ul>{{ items }}</ul>",
+            item_html='<li><a href="{{ url }}"{{ link_attributes }}><img src="{{ image }}" alt="{{ client_name }}">{{ client_html }}</a></li>',
+            css=".x{}",
+            include_css_in_article=True,
+        )
+        self.donor = DonorSite.objects.create(
+            name="Donor",
+            domain="donor.test",
+            admin_url="https://donor.test/administrator/",
+            page_url="https://donor.test/partners",
+            template=self.template,
+        )
         self.one = ClientSite.objects.create(name="One & Co", domain="one.test", default_html="<b>ONE</b>")
         self.two = ClientSite.objects.create(name="Two", domain="two.test", default_html="TWO")
 
     def test_order_override_disabled_attributes_marker_and_hash(self):
-        Placement.objects.create(donor=self.donor, client=self.one, position=20, target_blank=True, nofollow=True, sponsored=True)
-        Placement.objects.create(donor=self.donor, client=self.two, position=10, html_override="OVERRIDE", enabled=True)
-        disabled = ClientSite.objects.create(name="Off", domain="off.test", default_html="MUST NOT APPEAR")
+        Placement.objects.create(
+            donor=self.donor,
+            client=self.one,
+            position=20,
+            target_blank=True,
+            nofollow=True,
+            sponsored=True,
+        )
+        Placement.objects.create(
+            donor=self.donor,
+            client=self.two,
+            position=10,
+            html_override="OVERRIDE",
+            enabled=True,
+        )
+        disabled = ClientSite.objects.create(
+            name="Off",
+            domain="off.test",
+            default_html="MUST NOT APPEAR",
+        )
         Placement.objects.create(donor=self.donor, client=disabled, position=1, enabled=False)
         page = render_page(self.donor)
         self.assertLess(page.body_html.index("OVERRIDE"), page.body_html.index("<b>ONE</b>"))
@@ -28,9 +61,42 @@ class RendererTests(TestCase):
         self.assertIn("One &amp; Co", page.body_html)
 
     def test_disabled_client_is_ignored(self):
-        self.one.enabled = False; self.one.save()
+        self.one.enabled = False
+        self.one.save()
         Placement.objects.create(donor=self.donor, client=self.one)
         self.assertNotIn("ONE", render_page(self.donor).body_html)
+
+    @override_settings(PUBLIC_BASE_URL="https://parasyte.deluxmedia.ru")
+    def test_uploaded_logo_is_rendered_as_absolute_public_url(self):
+        self.one.logo = "client_logos/one.webp"
+        self.one.save(update_fields=["logo"])
+        Placement.objects.create(donor=self.donor, client=self.one)
+        page = render_page(self.donor)
+        self.assertIn(
+            'src="https://parasyte.deluxmedia.ru/media/client_logos/one.webp"',
+            page.body_html,
+        )
+
+    @override_settings(PUBLIC_BASE_URL="https://parasyte.deluxmedia.ru")
+    def test_relative_image_override_is_rendered_as_absolute_public_url(self):
+        Placement.objects.create(
+            donor=self.donor,
+            client=self.one,
+            image_override="/partners/one.webp",
+        )
+        page = render_page(self.donor)
+        self.assertIn('src="https://parasyte.deluxmedia.ru/partners/one.webp"', page.body_html)
+
+    @override_settings(PUBLIC_BASE_URL="https://parasyte.deluxmedia.ru")
+    def test_absolute_image_override_is_preserved(self):
+        Placement.objects.create(
+            donor=self.donor,
+            client=self.one,
+            image_override="https://cdn.example.test/one.webp",
+        )
+        page = render_page(self.donor)
+        self.assertIn('src="https://cdn.example.test/one.webp"', page.body_html)
+
 
 class CredentialTests(TestCase):
     def test_round_trip_and_form_never_contains_existing_secret(self):
@@ -38,7 +104,13 @@ class CredentialTests(TestCase):
         encrypted = encrypt_password("super-secret")
         self.assertNotIn("super-secret", encrypted)
         self.assertEqual(decrypt_password(encrypted), "super-secret")
-        donor = DonorSite(name="D", domain="d.test", admin_url="https://d.test/admin", page_url="https://d.test/p", encrypted_password=encrypted)
+        donor = DonorSite(
+            name="D",
+            domain="d.test",
+            admin_url="https://d.test/admin",
+            page_url="https://d.test/p",
+            encrypted_password=encrypted,
+        )
         html = DonorForm(instance=donor).as_p()
         self.assertNotIn("super-secret", html)
         self.assertNotIn(encrypted, html)

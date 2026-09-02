@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="workspace-head">
+  <div>
+    <a class="back" href="{% url 'dashboard' %}">← Партнёрские страницы</a>
+    <h1>Шаблоны страниц</h1>
+    <p class="muted">Разные доноры могут использовать разные wrapper, item HTML и CSS.</p>
+  </div>
+  <div class="actions">
+    <a class="btn primary" href="{% url 'template-create' %}">+ Шаблон</a>
+  </div>
+</section>
+
+<div class="client-grid template-grid">
+  {% for template in templates %}
+  <article class="client-card {% if not template.enabled %}is-disabled{% endif %}">
+    <div class="card-title">
+      <div><span class="avatar">{{ template.name|slice:':1' }}</span></div>
+      <div>
+        <h2>{{ template.name }}</h2>
+        <span class="muted">{{ template.slug }}</span>
+      </div>
+      <span class="badge {% if template.enabled %}success{% else %}muted-badge{% endif %}">
+        {% if template.enabled %}активен{% else %}выключен{% endif %}
+      </span>
+    </div>
+    <div class="metric"><strong>{{ template.donor_count }}</strong><span>доноров</span></div>
+    <div class="template-meta">
+      <span>Версия: <strong>{{ template.version }}</strong></span>
+      <span>CSS в материал: <strong>{% if template.include_css_in_article %}да{% else %}нет{% endif %}</strong></span>
+    </div>
+    <div class="card-actions">
+      <a class="btn small" href="{% url 'template-edit' template.pk %}">Редактировать</a>
+    </div>
+  </article>
+  {% empty %}
+  <div class="empty">
+    <h2>Шаблонов пока нет</h2>
+    <p>Создайте шаблон разметки партнёрской страницы.</p>
+    <a class="btn primary" href="{% url 'template-create' %}">+ Шаблон</a>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
