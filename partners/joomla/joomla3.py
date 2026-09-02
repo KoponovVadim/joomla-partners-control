@@ -147,6 +147,52 @@ class Joomla3Adapter(JoomlaAdapter):
         )
         return response, form, article
 
+    def _load_article_list_form(self, client):
+        url = urljoin(self.admin_url, "index.php?option=com_content&view=articles")
+        response = self._request(client, "GET", url)
+        soup = BeautifulSoup(response.text, "html.parser")
+        if soup.select_one("form#form-login"):
+            raise JoomlaAuthenticationError("Сессия Joomla завершилась")
+        form = soup.select_one("form#adminForm")
+        if not form:
+            alert = soup.select_one(".alert-error, .alert-danger, #system-message-container")
+            detail = " ".join(alert.stripped_strings) if alert else "список материалов недоступен"
+            raise JoomlaPermissionError(f"Joomla не вернула список материалов: {detail[:300]}")
+        return response, form
+
+    def _force_checkin_article(self, client, article_id):
+        response, form = self._load_article_list_form(client)
+        values = self._form_values(form)
+        values = self._replace(values, "task", "articles.checkin")
+        values = self._replace(values, "cid[]", int(article_id))
+        action = urljoin(
+            str(response.url),
+            form.get("action") or "index.php?option=com_content&view=articles",
+        )
+        checked = self._post_form(client, action, values)
+        result = BeautifulSoup(checked.text, "html.parser")
+        if result.select_one("form#form-login"):
+            raise JoomlaAuthenticationError("Сессия Joomla завершилась во время Check-in")
+        error = result.select_one(".alert-error, .alert-danger")
+        if error:
+            detail = " ".join(error.stripped_strings)[:300]
+            raise JoomlaPermissionError(
+                f"Не удалось снять блокировку материала #{article_id}: {detail}. "
+                "Сервисному пользователю Joomla требуется право Check-in (core.manage для com_checkin)."
+            )
+        return checked
+
+    def _load_article_form_for_write(self, client, article_id):
+        self._force_checkin_article(client, article_id)
+        try:
+            return self._load_article_form(client, article_id)
+        except JoomlaPermissionError as exc:
+            raise JoomlaPermissionError(
+                f"Материал #{article_id} недоступен после автоматического Check-in. "
+                "Проверьте, что сервисный пользователь Joomla имеет право Check-in "
+                "(core.manage для com_checkin) и право редактирования материала."
+            ) from exc
+
     def _load_new_article_form(self, client):
         url = urljoin(self.admin_url, "index.php?option=com_content&task=article.add")
         response = self._request(client, "GET", url)
@@ -257,15 +303,18 @@ class Joomla3Adapter(JoomlaAdapter):
     def adopt_article(self, article_id):
         with self._http_client() as client:
             self._login(client)
-            response, form, article = self._load_article_form(client, article_id)
+            response, form, article = self._load_article_form_for_write(client, article_id)
             expected = f"<!-- JPC-MANAGED-PAGE:{self.donor.managed_marker_uuid} -->"
             if expected in article.body_html:
+                self._cancel_article(client, response, form)
                 return f"Материал #{article_id} уже находится под управлением JPC"
             if "<!-- JPC-MANAGED-PAGE:" in article.body_html:
+                self._cancel_article(client, response, form)
                 raise ManagedMarkerMismatch("Материал содержит marker другого донора JPC")
             snapshot = self._save_snapshot(article, "before_adoption")
             self._submit_article(client, response, form, expected + "\n" + article.body_html)
-            verified = self.get_article(article_id)
+            verify_response, verify_form, verified = self._load_article_form_for_write(client, article_id)
+            self._cancel_article(client, verify_response, verify_form)
             if not has_managed_marker(verified.body_html, self.donor):
                 raise JoomlaArticleError(
                     "Joomla не сохранила managed-marker; исходный HTML сохранён в snapshot"
@@ -275,14 +324,15 @@ class Joomla3Adapter(JoomlaAdapter):
     def update_article(self, article_id, html):
         with self._http_client() as client:
             self._login(client)
-            response, form, article = self._load_article_form(client, article_id)
+            response, form, article = self._load_article_form_for_write(client, article_id)
             if not has_managed_marker(article.body_html, self.donor):
+                self._cancel_article(client, response, form)
                 raise ManagedMarkerMismatch(
                     "Публикация запрещена: managed-marker материала не совпадает. Сначала выполните принятие под управление."
                 )
             snapshot = self._save_snapshot(article, "before_update")
             self._submit_article(client, response, form, html)
-            verify_response, verify_form, verified = self._load_article_form(client, article_id)
+            verify_response, verify_form, verified = self._load_article_form_for_write(client, article_id)
             self._cancel_article(client, verify_response, verify_form)
             if not has_managed_marker(verified.body_html, self.donor):
                 raise JoomlaArticleError(
