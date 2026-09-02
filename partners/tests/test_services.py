@@ -7,7 +7,7 @@ from partners.services.page_renderer import has_managed_marker, render_page
 
 class RendererTests(TestCase):
     def setUp(self):
-        self.template = PageTemplate.objects.create(name="Default", slug="default", wrapper_html="<ul>{{ items }}</ul>", item_html='<li><a href="{{ url }}"{{ link_attributes }}><img src="{{ image }}" alt="{{ client_name }}">{{ client_html }}</a></li>', css=".x{}", include_css_in_article=True)
+        self.template = PageTemplate.objects.create(name="Test", slug="test-renderer", wrapper_html="<ul>{{ items }}</ul>", item_html='<li><a href="{{ url }}"{{ link_attributes }}><img src="{{ image }}" alt="{{ client_name }}">{{ client_html }}</a></li>', css=".x{}", include_css_in_article=True)
         self.donor = DonorSite.objects.create(name="Donor", domain="donor.test", admin_url="https://donor.test/administrator/", page_url="https://donor.test/partners", template=self.template)
         self.one = ClientSite.objects.create(name="One & Co", domain="one.test", default_html="<b>ONE</b>")
         self.two = ClientSite.objects.create(name="Two", domain="two.test", default_html="TWO")
@@ -42,4 +42,3 @@ class CredentialTests(TestCase):
         html = DonorForm(instance=donor).as_p()
         self.assertNotIn("super-secret", html)
         self.assertNotIn(encrypted, html)
-

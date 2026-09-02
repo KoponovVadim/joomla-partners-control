@@ -7,7 +7,7 @@ keep_port=0
 if [ -n "$current_port" ]; then
   if python3 -c "import socket; s=socket.socket(); s.bind(('127.0.0.1', int('$current_port'))); s.close()" 2>/dev/null; then
     keep_port=1
-  elif docker compose ps --format json 2>/dev/null | grep -q "127.0.0.1:${current_port}->8000"; then
+  elif docker compose port web 8000 2>/dev/null | grep -q ":${current_port}$"; then
     keep_port=1
   fi
 fi
@@ -25,4 +25,3 @@ fi
 docker compose up -d --build
 echo "Joomla Partners Control запущен:"
 echo "http://127.0.0.1:${current_port}"
-
