@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from hashlib import sha256
-from urllib.parse import urljoin
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -9,8 +9,11 @@ from partners.models import ArticleSnapshot
 from partners.services.page_renderer import has_managed_marker
 from .base import JoomlaAdapter
 from .exceptions import (
-    JoomlaArticleError, JoomlaAuthenticationError, JoomlaConnectionError,
-    JoomlaPermissionError, ManagedMarkerMismatch,
+    JoomlaArticleError,
+    JoomlaAuthenticationError,
+    JoomlaConnectionError,
+    JoomlaPermissionError,
+    ManagedMarkerMismatch,
 )
 
 
@@ -58,7 +61,25 @@ class Joomla3Adapter(JoomlaAdapter):
 
     @staticmethod
     def _replace(values, name, value):
-        return [(key, old) for key, old in values if key != name] + [(name, value)]
+        return [(key, old) for key, old in values if key != name] + [(name, str(value))]
+
+    @staticmethod
+    def _article_id_from_response(response, form=None):
+        if form is not None:
+            field = form.select_one('[name="jform[id]"]')
+            if field and str(field.get("value", "")).isdigit():
+                return int(field["value"])
+        query = parse_qs(urlparse(str(response.url)).query)
+        values = query.get("id", [])
+        if values and str(values[0]).isdigit():
+            return int(values[0])
+        return None
+
+    @staticmethod
+    def _raise_form_error(soup, prefix="Joomla отклонила сохранение"):
+        error = soup.select_one(".alert-error, .alert-danger")
+        if error:
+            raise JoomlaArticleError(f"{prefix}: " + " ".join(error.stripped_strings)[:300])
 
     def _request(self, client, method, url, **kwargs):
         try:
@@ -70,7 +91,9 @@ class Joomla3Adapter(JoomlaAdapter):
 
     def _post_form(self, client, url, values):
         return self._request(
-            client, "POST", url,
+            client,
+            "POST",
+            url,
             content=str(httpx.QueryParams(values)).encode(),
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
@@ -98,7 +121,10 @@ class Joomla3Adapter(JoomlaAdapter):
             raise JoomlaAuthenticationError(f"Вход в Joomla не выполнен: {detail[:300]}")
 
     def _load_article_form(self, client, article_id):
-        url = urljoin(self.admin_url, f"index.php?option=com_content&task=article.edit&id={int(article_id)}")
+        url = urljoin(
+            self.admin_url,
+            f"index.php?option=com_content&task=article.edit&id={int(article_id)}",
+        )
         response = self._request(client, "GET", url)
         soup = BeautifulSoup(response.text, "html.parser")
         if soup.select_one("form#form-login"):
@@ -114,16 +140,36 @@ class Joomla3Adapter(JoomlaAdapter):
         title = form.select_one('[name="jform[title]"]')
         alias = form.select_one('[name="jform[alias]"]')
         article = JoomlaArticle(
-            int(article_id), title.get("value", "") if title else "",
-            alias.get("value", "") if alias else "", editor.decode_contents(formatter=None),
+            int(article_id),
+            title.get("value", "") if title else "",
+            alias.get("value", "") if alias else "",
+            editor.decode_contents(formatter=None),
         )
         return response, form, article
 
+    def _load_new_article_form(self, client):
+        url = urljoin(self.admin_url, "index.php?option=com_content&task=article.add")
+        response = self._request(client, "GET", url)
+        soup = BeautifulSoup(response.text, "html.parser")
+        if soup.select_one("form#form-login"):
+            raise JoomlaAuthenticationError("Сессия Joomla завершилась")
+        form = soup.select_one("form#item-form")
+        if not form:
+            alert = soup.select_one(".alert-error, .alert-danger, #system-message-container")
+            detail = " ".join(alert.stripped_strings) if alert else "форма создания материала недоступна"
+            raise JoomlaPermissionError(f"Создание материала недоступно: {detail[:300]}")
+        if not form.select_one('[name="jform[articletext]"]'):
+            raise JoomlaArticleError("Форма создания Joomla не содержит поле jform[articletext]")
+        return response, form
+
     def _save_snapshot(self, article, reason):
         return ArticleSnapshot.objects.create(
-            donor=self.donor, article_id=article.article_id, title=article.title,
+            donor=self.donor,
+            article_id=article.article_id,
+            title=article.title,
             body_html=article.body_html,
-            body_hash=sha256(article.body_html.encode()).hexdigest(), reason=reason,
+            body_hash=sha256(article.body_html.encode()).hexdigest(),
+            reason=reason,
         )
 
     def _submit_article(self, client, response, form, html):
@@ -132,10 +178,8 @@ class Joomla3Adapter(JoomlaAdapter):
         values = self._replace(values, "task", "article.save")
         action = urljoin(str(response.url), form.get("action") or "index.php")
         saved = self._post_form(client, action, values)
-        result = BeautifulSoup(saved.text, "html.parser")
-        error = result.select_one(".alert-error, .alert-danger")
-        if error:
-            raise JoomlaArticleError("Joomla отклонила сохранение: " + " ".join(error.stripped_strings)[:300])
+        self._raise_form_error(BeautifulSoup(saved.text, "html.parser"))
+        return saved
 
     def _cancel_article(self, client, response, form):
         values = self._replace(self._form_values(form), "task", "article.cancel")
@@ -158,6 +202,58 @@ class Joomla3Adapter(JoomlaAdapter):
             self._cancel_article(client, response, form)
             return article
 
+    def create_article(self, alias="", html="", title=None, category_id=None, **kwargs):
+        title = (title or self.donor.article_title or "Наши партнёры").strip()
+        category_id = category_id or self.donor.article_category_id or 2
+        alias = alias or self.donor.article_alias
+        if not title:
+            raise JoomlaArticleError("Для создания материала не задан заголовок")
+
+        with self._http_client() as client:
+            self._login(client)
+            response, form = self._load_new_article_form(client)
+            values = self._form_values(form)
+            values = self._replace(values, "jform[title]", title)
+            values = self._replace(values, "jform[alias]", alias)
+            values = self._replace(values, "jform[catid]", category_id)
+            values = self._replace(values, "jform[articletext]", html)
+            values = self._replace(values, "jform[state]", 1)
+            values = self._replace(values, "task", "article.apply")
+            action = urljoin(str(response.url), form.get("action") or "index.php")
+            saved = self._post_form(client, action, values)
+            result = BeautifulSoup(saved.text, "html.parser")
+            self._raise_form_error(result, "Joomla отклонила создание материала")
+
+            saved_form = result.select_one("form#item-form")
+            article_id = self._article_id_from_response(saved, saved_form)
+            if not article_id:
+                raise JoomlaArticleError(
+                    "Joomla сохранила форму без определяемого ID материала; автоматическая привязка остановлена"
+                )
+            if not saved_form:
+                raise JoomlaArticleError(
+                    f"Материал, вероятно, создан как #{article_id}, но Joomla не вернула форму для проверки"
+                )
+
+            editor = saved_form.select_one('[name="jform[articletext]"]')
+            saved_html = editor.decode_contents(formatter=None) if editor else ""
+            alias_field = saved_form.select_one('[name="jform[alias]"]')
+            saved_alias = alias_field.get("value", "") if alias_field else alias
+            self._cancel_article(client, saved, saved_form)
+
+            if not has_managed_marker(saved_html, self.donor):
+                raise JoomlaArticleError(
+                    f"Материал #{article_id} создан, но managed-marker после записи не найден; дальнейшая синхронизация остановлена"
+                )
+
+            self.donor.article_id = article_id
+            update_fields = ["article_id", "updated_at"]
+            if saved_alias and saved_alias != self.donor.article_alias:
+                self.donor.article_alias = saved_alias
+                update_fields.append("article_alias")
+            self.donor.save(update_fields=update_fields)
+            return f"Материал #{article_id} создан и принят под управление JPC"
+
     def adopt_article(self, article_id):
         with self._http_client() as client:
             self._login(client)
@@ -171,7 +267,9 @@ class Joomla3Adapter(JoomlaAdapter):
             self._submit_article(client, response, form, expected + "\n" + article.body_html)
             verified = self.get_article(article_id)
             if not has_managed_marker(verified.body_html, self.donor):
-                raise JoomlaArticleError("Joomla не сохранила managed-marker; исходный HTML сохранён в snapshot")
+                raise JoomlaArticleError(
+                    "Joomla не сохранила managed-marker; исходный HTML сохранён в snapshot"
+                )
             return f"Материал #{article_id} принят под управление; backup snapshot #{snapshot.pk}"
 
     def update_article(self, article_id, html):
@@ -179,11 +277,15 @@ class Joomla3Adapter(JoomlaAdapter):
             self._login(client)
             response, form, article = self._load_article_form(client, article_id)
             if not has_managed_marker(article.body_html, self.donor):
-                raise ManagedMarkerMismatch("Публикация запрещена: managed-marker материала не совпадает. Сначала выполните принятие под управление.")
+                raise ManagedMarkerMismatch(
+                    "Публикация запрещена: managed-marker материала не совпадает. Сначала выполните принятие под управление."
+                )
             snapshot = self._save_snapshot(article, "before_update")
             self._submit_article(client, response, form, html)
             verify_response, verify_form, verified = self._load_article_form(client, article_id)
             self._cancel_article(client, verify_response, verify_form)
             if not has_managed_marker(verified.body_html, self.donor):
-                raise JoomlaArticleError(f"Проверка после записи не пройдена; backup snapshot #{snapshot.pk}")
+                raise JoomlaArticleError(
+                    f"Проверка после записи не пройдена; backup snapshot #{snapshot.pk}"
+                )
             return f"Материал #{article_id} обновлён; backup snapshot #{snapshot.pk}"
