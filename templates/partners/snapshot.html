@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Snapshot #{{ snapshot.pk }} · {{ donor.domain }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a class="back" href="{% url 'donor-edit' donor.pk %}">← Настройки донора</a>
+    <h1>Snapshot #{{ snapshot.pk }} · {{ donor.domain }}</h1>
+    <p class="muted">{{ snapshot.created_at|date:'d.m.Y H:i:s' }} · {{ snapshot.reason }} · материал #{{ snapshot.article_id }}</p>
+  </div>
+  <span class="hash">SHA-256: {{ snapshot.body_hash }}</span>
+</div>
+
+<div class="preview-layout">
+  <section class="panel visual-preview">
+    <div class="panel-head"><h2>Сохранённая версия</h2><span>{% if snapshot.has_current_managed_marker %}managed{% else %}без текущего marker{% endif %}</span></div>
+    <iframe id="page-preview" title="Snapshot preview" sandbox="allow-popups"></iframe>
+    {{ snapshot.body_html|json_script:"preview-source" }}
+  </section>
+  <aside class="panel included">
+    <div class="panel-head"><h2>Восстановление</h2></div>
+    {% if snapshot.has_current_managed_marker and donor.joomla_version == '3' and donor.article_id == snapshot.article_id %}
+      <p class="muted">Snapshot содержит текущий managed-marker и относится к привязанному материалу. Перед восстановлением текущее состояние Joomla будет сохранено ещё одним snapshot.</p>
+      <form class="standalone-action" method="post" action="{% url 'donor-restore-snapshot' donor.pk snapshot.pk %}" data-confirm="Восстановить эту версию материала на Joomla? Текущее состояние будет предварительно сохранено.">{% csrf_token %}<button class="btn primary wide">Восстановить эту версию</button></form>
+    {% else %}
+      <div class="message warning">Автоматическое восстановление заблокировано: snapshot не содержит текущий managed-marker, относится к другому материалу или донор не использует Joomla 3.</div>
+    {% endif %}
+  </aside>
+</div>
+
+<section class="panel source-panel">
+  <div class="panel-head"><h2>HTML snapshot</h2><span>{{ snapshot.body_html|length }} символов</span></div>
+  <pre><code>{{ snapshot.body_html }}</code></pre>
+</section>
+{% endblock %}
