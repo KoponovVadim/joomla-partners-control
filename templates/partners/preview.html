@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Предпросмотр {{ donor.domain }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><a class="back" href="{% url 'dashboard' %}">← Назад</a><h1>Предпросмотр · {{ donor.domain }}</h1></div><span class="hash">SHA-256: {{ page.body_hash }}</span></div>
+<div class="preview-layout">
+  <section class="panel visual-preview"><div class="panel-head"><h2>Визуальный preview</h2><span>{{ page.clients|length }} клиентов</span></div><iframe id="page-preview" title="Предпросмотр" sandbox="allow-popups"></iframe>{{ page.final_html|json_script:"preview-source" }}</section>
+  <aside class="panel included"><div class="panel-head"><h2>Вошли в страницу</h2></div><ul>{% for client in page.clients %}<li>{{ client.name }}<small>{{ client.domain }}</small></li>{% empty %}<li class="muted">Нет активных клиентов</li>{% endfor %}</ul></aside>
+</div>
+<section class="panel source-panel"><div class="source-tabs"><button class="active" data-source-tab="html">Итоговый HTML</button><button data-source-tab="css">CSS</button></div><pre data-source="html"><code>{{ page.final_html }}</code></pre><pre data-source="css" hidden><code>{{ page.css }}</code></pre></section>
+{% endblock %}
+

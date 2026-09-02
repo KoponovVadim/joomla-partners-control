@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Вход · JPC{% endblock %}
+{% block shell_class %}login-shell{% endblock %}
+{% block content %}
+<section class="login-card">
+  <div class="brand-mark large">JP</div>
+  <h1>Joomla Partners Control</h1>
+  <p class="muted">Внутренняя система управления страницами партнёров</p>
+  {% if form.errors %}<div class="message error">Неверный логин или пароль.</div>{% endif %}
+  <form method="post" class="stack">{% csrf_token %}
+    <label>Логин {{ form.username }}</label>
+    <label>Пароль {{ form.password }}</label>
+    <button class="btn primary wide">Войти</button>
+  </form>
+</section>
+{% endblock %}
+

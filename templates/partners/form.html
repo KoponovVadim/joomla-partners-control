@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · JPC{% endblock %}
+{% block content %}
+<div class="page-head"><div><a class="back" href="{% url 'dashboard' %}">← Назад</a><h1>{{ title }}</h1></div>{% if kind == 'donor' and object %}<span class="connection {{ object.connection_status }}"><i></i>{{ object.get_connection_status_display }}</span>{% endif %}</div>
+<div class="form-layout {% if kind == 'client' %}with-preview{% endif %}">
+  <form method="post" enctype="multipart/form-data" class="panel form-panel">{% csrf_token %}
+    {% if form.non_field_errors %}<div class="message error">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="form-grid">
+    {% for field in form %}
+      <div class="field {% if field.name == 'default_html' or field.name == 'html_override' or field.name == 'wrapper_html' or field.name == 'item_html' or field.name == 'css' or field.name == 'notes' %}span-2{% endif %} {% if field.field.widget.input_type == 'checkbox' %}check-field{% endif %}">
+        <label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<small class="error-text">{{ error }}</small>{% endfor %}
+      </div>
+    {% endfor %}
+    </div>
+    {% if kind == 'donor' and object and object.password_is_set %}<p class="saved-note">✓ Пароль сохранён в зашифрованном виде</p>{% endif %}
+    <div class="form-actions"><button class="btn primary">Сохранить</button><a class="btn" href="{% url 'dashboard' %}">Отмена</a></div>
+  </form>
+  {% if kind == 'client' %}<aside class="panel live-preview"><div class="section-label">Предпросмотр HTML</div><iframe title="Предпросмотр клиента" sandbox="allow-popups"></iframe><p class="muted small-text">Скрипты отключены изолированным iframe.</p></aside>{% endif %}
+</div>
+{% if kind == 'donor' and object %}<form method="post" action="{% url 'donor-test' object.pk %}" class="standalone-action">{% csrf_token %}<button class="btn">Проверить подключение</button></form>{% endif %}
+{% endblock %}
+

@@ -1,0 +1,28 @@
+{% load static %}
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Joomla Partners Control{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'partners/app.css' %}">
+  <script src="{% static 'partners/app.js' %}" defer></script>
+</head>
+<body>
+{% if user.is_authenticated %}
+<header class="topbar">
+  <a class="brand" href="{% url 'dashboard' %}"><span class="brand-mark">JP</span><span>Joomla Partners Control<small>внутренняя система</small></span></a>
+  <nav class="topnav">
+    <a href="{% url 'logs' %}">Журнал</a>
+    <a href="/admin/">Django admin</a>
+    <form action="{% url 'logout' %}" method="post">{% csrf_token %}<button class="link-button">Выйти</button></form>
+  </nav>
+</header>
+{% endif %}
+<main class="shell {% block shell_class %}{% endblock %}">
+  {% if messages %}<div class="messages">{% for message in messages %}<div class="message {{ message.tags }}">{{ message }}</div>{% endfor %}</div>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>
+
