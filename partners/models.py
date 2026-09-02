@@ -134,6 +134,7 @@ class PublicationLog(models.Model):
         UPDATE_ARTICLE = "update_article", "Обновление материала"
         TRASH_ARTICLE = "trash_article", "В корзину"
         RESTORE_ARTICLE = "restore_article", "Восстановление"
+        RESTORE_SNAPSHOT = "restore_snapshot", "Восстановление snapshot"
         ADOPT_ARTICLE = "adopt_article", "Принятие под управление"
 
     class Status(models.TextChoices):
@@ -164,3 +165,8 @@ class ArticleSnapshot(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+    @property
+    def has_current_managed_marker(self):
+        marker = f"<!-- JPC-MANAGED-PAGE:{self.donor.managed_marker_uuid} -->"
+        return marker in self.body_html

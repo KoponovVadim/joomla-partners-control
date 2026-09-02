@@ -12,7 +12,7 @@ from django.views.decorators.http import require_POST
 from .forms import ClientForm, DonorForm, PageTemplateForm, PlacementForm
 from .joomla import get_adapter
 from .joomla.exceptions import JoomlaError, JoomlaNotImplementedError
-from .models import ClientSite, DonorSite, PageTemplate, Placement, PublicationLog
+from .models import ArticleSnapshot, ClientSite, DonorSite, PageTemplate, Placement, PublicationLog
 from .services.credentials import encrypt_password
 from .services.page_renderer import render_page
 
@@ -45,6 +45,7 @@ def donor_edit(request, pk=None):
         donor.save()
         messages.success(request, "Настройки донора сохранены.")
         return redirect("dashboard")
+    snapshots = donor.article_snapshots.all()[:12] if donor else []
     return render(
         request,
         "partners/form.html",
@@ -53,6 +54,7 @@ def donor_edit(request, pk=None):
             "title": "Новый донор" if not donor else f"Настройки: {donor.domain}",
             "object": donor,
             "kind": "donor",
+            "snapshots": snapshots,
         },
     )
 
@@ -141,6 +143,17 @@ def donor_preview(request, pk):
     return render(request, "partners/preview.html", {"donor": donor, "page": page})
 
 
+@login_required
+def donor_snapshot(request, pk, snapshot_pk):
+    donor = get_object_or_404(DonorSite, pk=pk)
+    snapshot = get_object_or_404(ArticleSnapshot, pk=snapshot_pk, donor=donor)
+    return render(
+        request,
+        "partners/snapshot.html",
+        {"donor": donor, "snapshot": snapshot},
+    )
+
+
 def _adapter_action(donor, action, callback, html_hash=""):
     try:
         result = callback(get_adapter(donor))
@@ -216,6 +229,44 @@ def donor_adopt(request, pk):
         lambda adapter: adapter.adopt_article(donor.article_id),
     )
     if status == "success":
+        messages.success(request, message)
+    else:
+        messages.error(request, message)
+    return redirect("donor-edit", pk=pk)
+
+
+@login_required
+@require_POST
+def donor_restore_snapshot(request, pk, snapshot_pk):
+    donor = get_object_or_404(DonorSite, pk=pk)
+    snapshot = get_object_or_404(ArticleSnapshot, pk=snapshot_pk, donor=donor)
+
+    if donor.joomla_version != "3" or not donor.article_id:
+        messages.error(request, "Восстановление snapshot сейчас доступно только для привязанного материала Joomla 3.")
+        return redirect("donor-edit", pk=pk)
+    if snapshot.article_id != donor.article_id:
+        messages.error(request, "Snapshot относится к другому ID материала и не может быть восстановлен автоматически.")
+        return redirect("donor-edit", pk=pk)
+    if not snapshot.has_current_managed_marker:
+        messages.error(
+            request,
+            "Этот snapshot не содержит текущий managed-marker. Его можно просмотреть, но автоматическое восстановление заблокировано.",
+        )
+        return redirect("donor-snapshot", pk=pk, snapshot_pk=snapshot.pk)
+
+    def restore(adapter):
+        result = adapter.update_article(donor.article_id, snapshot.body_html)
+        return f"Snapshot #{snapshot.pk} восстановлен. {result}"
+
+    status, message = _adapter_action(
+        donor,
+        "restore_snapshot",
+        restore,
+        snapshot.body_hash,
+    )
+    if status == "success":
+        donor.last_published_at = timezone.now()
+        donor.save(update_fields=["last_published_at", "updated_at"])
         messages.success(request, message)
     else:
         messages.error(request, message)

@@ -1,12 +1,20 @@
 import json
 import tempfile
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from partners.models import ClientSite, DonorSite, PageTemplate, Placement
+from partners.models import (
+    ArticleSnapshot,
+    ClientSite,
+    DonorSite,
+    PageTemplate,
+    Placement,
+    PublicationLog,
+)
 
 
 class PlacementViewTests(TestCase):
@@ -128,6 +136,96 @@ class TemplateViewTests(TestCase):
         self.assertTrue(self.second.include_css_in_article)
 
 
+class SnapshotViewTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user("snapshot-operator", password="test")
+        self.client.force_login(self.user)
+        self.donor = DonorSite.objects.create(
+            name="Snapshot donor",
+            domain="snapshot.test",
+            admin_url="https://snapshot.test/administrator/",
+            page_url="https://snapshot.test/partners",
+            joomla_version="3",
+            article_id=87,
+        )
+        self.marker = f"<!-- JPC-MANAGED-PAGE:{self.donor.managed_marker_uuid} -->"
+        self.snapshot = ArticleSnapshot.objects.create(
+            donor=self.donor,
+            article_id=87,
+            title="Partners",
+            body_html=self.marker + "\n<ul><li>old</li></ul>",
+            body_hash="a" * 64,
+            reason="before_update",
+        )
+
+    def test_snapshot_preview_is_scoped_to_donor(self):
+        response = self.client.get(reverse("donor-snapshot", args=[self.donor.pk, self.snapshot.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Snapshot #")
+        self.assertContains(response, "old")
+
+        other = DonorSite.objects.create(
+            name="Other donor",
+            domain="other-snapshot.test",
+            admin_url="https://other-snapshot.test/administrator/",
+            page_url="https://other-snapshot.test/partners",
+        )
+        response = self.client.get(reverse("donor-snapshot", args=[other.pk, self.snapshot.pk]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_managed_snapshot_can_be_restored(self):
+        adapter = Mock()
+        adapter.update_article.return_value = "Материал #87 обновлён; backup snapshot #99"
+        with patch("partners.views.get_adapter", return_value=adapter):
+            response = self.client.post(
+                reverse("donor-restore-snapshot", args=[self.donor.pk, self.snapshot.pk])
+            )
+
+        self.assertRedirects(response, reverse("donor-edit", args=[self.donor.pk]))
+        adapter.update_article.assert_called_once_with(87, self.snapshot.body_html)
+        self.donor.refresh_from_db()
+        self.assertIsNotNone(self.donor.last_published_at)
+        log = PublicationLog.objects.get(action="restore_snapshot")
+        self.assertEqual(log.status, "success")
+        self.assertEqual(log.generated_html_hash, self.snapshot.body_hash)
+        self.assertIn(f"Snapshot #{self.snapshot.pk} восстановлен", log.message)
+
+    def test_before_adoption_snapshot_is_preview_only(self):
+        original = ArticleSnapshot.objects.create(
+            donor=self.donor,
+            article_id=87,
+            title="Original",
+            body_html="<p>Original unmanaged HTML</p>",
+            body_hash="b" * 64,
+            reason="before_adoption",
+        )
+        with patch("partners.views.get_adapter") as get_adapter:
+            response = self.client.post(
+                reverse("donor-restore-snapshot", args=[self.donor.pk, original.pk])
+            )
+
+        self.assertRedirects(
+            response,
+            reverse("donor-snapshot", args=[self.donor.pk, original.pk]),
+        )
+        get_adapter.assert_not_called()
+        self.assertFalse(PublicationLog.objects.filter(action="restore_snapshot").exists())
+
+    def test_snapshot_for_old_article_id_cannot_be_restored(self):
+        old_article = ArticleSnapshot.objects.create(
+            donor=self.donor,
+            article_id=12,
+            body_html=self.marker + "\n<p>old article</p>",
+            body_hash="c" * 64,
+        )
+        with patch("partners.views.get_adapter") as get_adapter:
+            response = self.client.post(
+                reverse("donor-restore-snapshot", args=[self.donor.pk, old_article.pk])
+            )
+        self.assertRedirects(response, reverse("donor-edit", args=[self.donor.pk]))
+        get_adapter.assert_not_called()
+
+
 class PublicMediaTests(TestCase):
     def test_media_is_publicly_readable_with_debug_disabled(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -147,4 +245,12 @@ class PublicMediaTests(TestCase):
         with tempfile.TemporaryDirectory() as directory:
             with override_settings(MEDIA_ROOT=Path(directory), DEBUG=False):
                 response = self.client.get("/media/client_logos/missing.webp")
+                self.assertEqual(response.status_code, 404)
+
+    def test_non_logo_media_is_not_public(self):
+        with tempfile.TemporaryDirectory() as directory:
+            media_root = Path(directory)
+            (media_root / "secret.txt").write_text("not public", encoding="utf-8")
+            with override_settings(MEDIA_ROOT=media_root, DEBUG=False):
+                response = self.client.get("/media/secret.txt")
                 self.assertEqual(response.status_code, 404)
