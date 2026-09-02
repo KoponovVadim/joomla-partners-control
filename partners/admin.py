@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ClientSite, DonorSite, PageTemplate, Placement, PublicationLog
+from .models import ArticleSnapshot, ClientSite, DonorSite, PageTemplate, Placement, PublicationLog
 
 class PlacementInline(admin.TabularInline):
     model = Placement
@@ -21,4 +21,4 @@ class ClientAdmin(admin.ModelAdmin):
 admin.site.register(PageTemplate)
 admin.site.register(Placement)
 admin.site.register(PublicationLog)
-
+admin.site.register(ArticleSnapshot)

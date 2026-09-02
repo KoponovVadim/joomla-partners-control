@@ -101,7 +101,7 @@ def _adapter_action(donor, action, callback, html_hash=""):
 def donor_test(request, pk):
     donor = get_object_or_404(DonorSite, pk=pk)
     status, message = _adapter_action(donor, "connection_test", lambda adapter: adapter.test_connection())
-    donor.connection_status = status
+    donor.connection_status = "online" if status == "success" else status
     donor.last_checked_at = timezone.now(); donor.save(update_fields=["connection_status", "last_checked_at", "updated_at"])
     messages.info(request, message)
     return redirect("donor-edit", pk=pk)
@@ -122,6 +122,20 @@ def donor_sync(request, pk):
         donor.last_published_at = timezone.now(); donor.save(update_fields=["last_published_at", "updated_at"])
     messages.info(request, message)
     return redirect("dashboard")
+
+
+@login_required
+@require_POST
+def donor_adopt(request, pk):
+    donor = get_object_or_404(DonorSite, pk=pk)
+    if donor.joomla_version != "3" or not donor.article_id:
+        messages.error(request, "Для принятия укажите Joomla 3 и ID существующего материала.")
+        return redirect("donor-edit", pk=pk)
+    status, message = _adapter_action(
+        donor, "adopt_article", lambda adapter: adapter.adopt_article(donor.article_id)
+    )
+    messages.success(request, message) if status == "success" else messages.error(request, message)
+    return redirect("donor-edit", pk=pk)
 
 
 @login_required

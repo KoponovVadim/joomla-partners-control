@@ -1,3 +1,189 @@
-from .base import JoomlaAdapter
-class Joomla3Adapter(JoomlaAdapter): version = "3"
+from dataclasses import dataclass
+from hashlib import sha256
+from urllib.parse import urljoin
 
+import httpx
+from bs4 import BeautifulSoup
+
+from partners.models import ArticleSnapshot
+from partners.services.page_renderer import has_managed_marker
+from .base import JoomlaAdapter
+from .exceptions import (
+    JoomlaArticleError, JoomlaAuthenticationError, JoomlaConnectionError,
+    JoomlaPermissionError, ManagedMarkerMismatch,
+)
+
+
+@dataclass(frozen=True)
+class JoomlaArticle:
+    article_id: int
+    title: str
+    alias: str
+    body_html: str
+
+
+class Joomla3Adapter(JoomlaAdapter):
+    version = "3"
+    user_agent = "JoomlaPartnersControl/1.0"
+
+    def _http_client(self):
+        return httpx.Client(
+            follow_redirects=True,
+            timeout=httpx.Timeout(20.0, connect=10.0),
+            headers={"User-Agent": self.user_agent},
+        )
+
+    @property
+    def admin_url(self):
+        return self.donor.admin_url.rstrip("/") + "/"
+
+    @staticmethod
+    def _form_values(form):
+        values = []
+        for field in form.select("input[name], textarea[name], select[name]"):
+            name = field.get("name")
+            if field.name == "input":
+                field_type = field.get("type", "text").lower()
+                if field_type in {"submit", "button", "file", "image", "reset"}:
+                    continue
+                if field_type in {"checkbox", "radio"} and not field.has_attr("checked"):
+                    continue
+                values.append((name, field.get("value", "")))
+            elif field.name == "textarea":
+                values.append((name, field.decode_contents(formatter=None)))
+            else:
+                selected = field.select("option[selected]") or field.select("option:not([disabled])")[:1]
+                values.extend((name, option.get("value", option.text)) for option in selected)
+        return values
+
+    @staticmethod
+    def _replace(values, name, value):
+        return [(key, old) for key, old in values if key != name] + [(name, value)]
+
+    def _request(self, client, method, url, **kwargs):
+        try:
+            response = client.request(method, url, **kwargs)
+            response.raise_for_status()
+            return response
+        except (httpx.HTTPError, OSError) as exc:
+            raise JoomlaConnectionError(f"Ошибка HTTP при обращении к Joomla: {exc}") from exc
+
+    def _post_form(self, client, url, values):
+        return self._request(
+            client, "POST", url,
+            content=str(httpx.QueryParams(values)).encode(),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+    def _login(self, client):
+        username, password = self.credentials()
+        if not username or not password:
+            raise JoomlaAuthenticationError("Не заполнены логин или пароль Joomla")
+        response = self._request(client, "GET", self.admin_url)
+        soup = BeautifulSoup(response.text, "html.parser")
+        form = soup.select_one("form#form-login")
+        if not form:
+            if soup.select_one("a[href*='task=logout'], .nav-user, #menu"):
+                return
+            raise JoomlaAuthenticationError("Joomla не вернула ожидаемую форму входа")
+        values = self._form_values(form)
+        values = self._replace(values, "username", username)
+        values = self._replace(values, "passwd", password)
+        action = urljoin(str(response.url), form.get("action") or "index.php")
+        response = self._post_form(client, action, values)
+        result = BeautifulSoup(response.text, "html.parser")
+        if result.select_one("form#form-login"):
+            alert = result.select_one(".alert-error, .alert-danger, #system-message-container")
+            detail = " ".join(alert.stripped_strings) if alert else "неверный логин, пароль или недостаточно прав"
+            raise JoomlaAuthenticationError(f"Вход в Joomla не выполнен: {detail[:300]}")
+
+    def _load_article_form(self, client, article_id):
+        url = urljoin(self.admin_url, f"index.php?option=com_content&task=article.edit&id={int(article_id)}")
+        response = self._request(client, "GET", url)
+        soup = BeautifulSoup(response.text, "html.parser")
+        if soup.select_one("form#form-login"):
+            raise JoomlaAuthenticationError("Сессия Joomla завершилась")
+        form = soup.select_one("form#item-form")
+        if not form:
+            alert = soup.select_one(".alert-error, .alert-danger, #system-message-container")
+            detail = " ".join(alert.stripped_strings) if alert else "форма редактирования недоступна"
+            raise JoomlaPermissionError(f"Материал #{article_id}: {detail[:300]}")
+        editor = form.select_one('[name="jform[articletext]"]')
+        if not editor:
+            raise JoomlaArticleError("Редактор Joomla не содержит поле jform[articletext]")
+        title = form.select_one('[name="jform[title]"]')
+        alias = form.select_one('[name="jform[alias]"]')
+        article = JoomlaArticle(
+            int(article_id), title.get("value", "") if title else "",
+            alias.get("value", "") if alias else "", editor.decode_contents(formatter=None),
+        )
+        return response, form, article
+
+    def _save_snapshot(self, article, reason):
+        return ArticleSnapshot.objects.create(
+            donor=self.donor, article_id=article.article_id, title=article.title,
+            body_html=article.body_html,
+            body_hash=sha256(article.body_html.encode()).hexdigest(), reason=reason,
+        )
+
+    def _submit_article(self, client, response, form, html):
+        values = self._form_values(form)
+        values = self._replace(values, "jform[articletext]", html)
+        values = self._replace(values, "task", "article.save")
+        action = urljoin(str(response.url), form.get("action") or "index.php")
+        saved = self._post_form(client, action, values)
+        result = BeautifulSoup(saved.text, "html.parser")
+        error = result.select_one(".alert-error, .alert-danger")
+        if error:
+            raise JoomlaArticleError("Joomla отклонила сохранение: " + " ".join(error.stripped_strings)[:300])
+
+    def _cancel_article(self, client, response, form):
+        values = self._replace(self._form_values(form), "task", "article.cancel")
+        action = urljoin(str(response.url), form.get("action") or "index.php")
+        self._post_form(client, action, values)
+
+    def test_connection(self):
+        with self._http_client() as client:
+            self._login(client)
+            if self.donor.article_id:
+                response, form, article = self._load_article_form(client, self.donor.article_id)
+                self._cancel_article(client, response, form)
+                return f"Joomla 3: вход выполнен, материал #{article.article_id} доступен — {article.title}"
+            return "Joomla 3: вход в administrator выполнен"
+
+    def get_article(self, article_id):
+        with self._http_client() as client:
+            self._login(client)
+            response, form, article = self._load_article_form(client, article_id)
+            self._cancel_article(client, response, form)
+            return article
+
+    def adopt_article(self, article_id):
+        with self._http_client() as client:
+            self._login(client)
+            response, form, article = self._load_article_form(client, article_id)
+            expected = f"<!-- JPC-MANAGED-PAGE:{self.donor.managed_marker_uuid} -->"
+            if expected in article.body_html:
+                return f"Материал #{article_id} уже находится под управлением JPC"
+            if "<!-- JPC-MANAGED-PAGE:" in article.body_html:
+                raise ManagedMarkerMismatch("Материал содержит marker другого донора JPC")
+            snapshot = self._save_snapshot(article, "before_adoption")
+            self._submit_article(client, response, form, expected + "\n" + article.body_html)
+            verified = self.get_article(article_id)
+            if not has_managed_marker(verified.body_html, self.donor):
+                raise JoomlaArticleError("Joomla не сохранила managed-marker; исходный HTML сохранён в snapshot")
+            return f"Материал #{article_id} принят под управление; backup snapshot #{snapshot.pk}"
+
+    def update_article(self, article_id, html):
+        with self._http_client() as client:
+            self._login(client)
+            response, form, article = self._load_article_form(client, article_id)
+            if not has_managed_marker(article.body_html, self.donor):
+                raise ManagedMarkerMismatch("Публикация запрещена: managed-marker материала не совпадает. Сначала выполните принятие под управление.")
+            snapshot = self._save_snapshot(article, "before_update")
+            self._submit_article(client, response, form, html)
+            verify_response, verify_form, verified = self._load_article_form(client, article_id)
+            self._cancel_article(client, verify_response, verify_form)
+            if not has_managed_marker(verified.body_html, self.donor):
+                raise JoomlaArticleError(f"Проверка после записи не пройдена; backup snapshot #{snapshot.pk}")
+            return f"Материал #{article_id} обновлён; backup snapshot #{snapshot.pk}"

@@ -15,4 +15,4 @@ class JoomlaAdapter(ABC):
     def create_article(self, **kwargs): self._unavailable("создание материала")
     def trash_article(self, article_id): self._unavailable("удаление материала")
     def restore_article(self, article_id): self._unavailable("восстановление материала")
-
+    def adopt_article(self, article_id): self._unavailable("принятие материала под управление")

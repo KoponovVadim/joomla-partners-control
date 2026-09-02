@@ -17,6 +17,5 @@
   </form>
   {% if kind == 'client' %}<aside class="panel live-preview"><div class="section-label">Предпросмотр HTML</div><iframe title="Предпросмотр клиента" sandbox="allow-popups"></iframe><p class="muted small-text">Скрипты отключены изолированным iframe.</p></aside>{% endif %}
 </div>
-{% if kind == 'donor' and object %}<form method="post" action="{% url 'donor-test' object.pk %}" class="standalone-action">{% csrf_token %}<button class="btn">Проверить подключение</button></form>{% endif %}
+{% if kind == 'donor' and object %}<div class="standalone-action actions"><form method="post" action="{% url 'donor-test' object.pk %}">{% csrf_token %}<button class="btn">Проверить подключение</button></form>{% if object.joomla_version == '3' and object.article_id %}<form method="post" action="{% url 'donor-adopt' object.pk %}" data-confirm="Будет сохранена резервная копия HTML и в материал добавится невидимый managed-marker. Продолжить?">{% csrf_token %}<button class="btn">Принять материал под управление</button></form>{% endif %}</div>{% endif %}
 {% endblock %}
-

@@ -97,6 +97,7 @@ class PublicationLog(models.Model):
         UPDATE_ARTICLE = "update_article", "Обновление материала"
         TRASH_ARTICLE = "trash_article", "В корзину"
         RESTORE_ARTICLE = "restore_article", "Восстановление"
+        ADOPT_ARTICLE = "adopt_article", "Принятие под управление"
     class Status(models.TextChoices):
         SUCCESS = "success", "Успешно"
         ERROR = "error", "Ошибка"
@@ -107,6 +108,18 @@ class PublicationLog(models.Model):
     message = models.TextField(blank=True)
     generated_html_hash = models.CharField(max_length=64, blank=True)
     response_code = models.PositiveIntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class ArticleSnapshot(models.Model):
+    donor = models.ForeignKey(DonorSite, related_name="article_snapshots", on_delete=models.CASCADE)
+    article_id = models.PositiveIntegerField()
+    title = models.CharField(max_length=500, blank=True)
+    body_html = models.TextField()
+    body_hash = models.CharField(max_length=64)
+    reason = models.CharField(max_length=40, default="before_update")
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ["-created_at"]

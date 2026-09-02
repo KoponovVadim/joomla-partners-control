@@ -7,7 +7,7 @@
 - `partners/models.py` — DonorSite, ClientSite, Placement, PageTemplate, PublicationLog.
 - `partners/services/page_renderer.py` — детерминированный renderer, CSS отдельно от body, SHA-256 и защитный `JPC-MANAGED-PAGE` marker.
 - `partners/services/credentials.py` — Fernet-шифрование паролей ключом из environment.
-- `partners/joomla/` — интерфейс и отдельные адаптеры Joomla 3/4/5. Сетевые публикации намеренно оставлены отдельным этапом и сейчас честно возвращают `not_implemented`.
+- `partners/joomla/` — интерфейс и отдельные адаптеры Joomla 3/4/5. Joomla 3 поддерживает вход в administrator, чтение существующего материала, безопасное принятие под управление и обновление; Joomla 4/5 пока честно возвращают `not_implemented`.
 - `partners/views.py`, Django templates и vanilla JS — собственный защищённый интерфейс, CRUD, fetch-переключатели и drag-and-drop.
 - Django admin доступен как служебный интерфейс `/admin/`.
 
@@ -67,6 +67,8 @@ cat backup.sql | docker compose exec -T db psql -U joomla_partners joomla_partne
 ## Модели и безопасность удаления
 
 DonorSite описывает Joomla-сайт и содержит уникальный managed-marker. ClientSite хранит логотип и цельный HTML-фрагмент. Placement связывает их, задаёт порядок, overrides и link attributes; пара donor/client уникальна. PageTemplate содержит wrapper/item/CSS и настройку включения CSS в материал. PublicationLog фиксирует preview, connection и publication actions с реальным статусом.
+
+Перед первой записью в существующий материал Joomla 3 оператор обязан нажать «Принять материал под управление». Система сохраняет полный исходный HTML в `ArticleSnapshot`, затем добавляет невидимый UUID-marker. Каждое последующее обновление также создаёт snapshot и запрещается при несовпадении marker. Проверка подключения читает материал и корректно снимает блокировку редактирования через `article.cancel`.
 
 Удаление Placement убирает только связь. ClientSite архивируется через `enabled=false`, связи сохраняются. Физическое удаление клиента, имеющего размещения, защищено `PROTECT`. Будущие trash/cleanup операции Joomla обязаны сначала получить материал и проверить совпадение managed-marker; одного совпавшего article ID недостаточно.
 
