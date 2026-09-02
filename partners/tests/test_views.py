@@ -1,7 +1,9 @@
 import json
+import tempfile
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from partners.models import ClientSite, DonorSite, PageTemplate, Placement
@@ -124,3 +126,25 @@ class TemplateViewTests(TestCase):
         self.assertEqual(self.second.name, "Second updated")
         self.assertEqual(self.second.version, 2)
         self.assertTrue(self.second.include_css_in_article)
+
+
+class PublicMediaTests(TestCase):
+    def test_media_is_publicly_readable_with_debug_disabled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            media_root = Path(directory)
+            logo_dir = media_root / "client_logos"
+            logo_dir.mkdir()
+            (logo_dir / "logo.webp").write_bytes(b"RIFFfake-webp")
+
+            with override_settings(MEDIA_ROOT=media_root, DEBUG=False):
+                response = self.client.get("/media/client_logos/logo.webp")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response["Content-Type"], "image/webp")
+                self.assertEqual(response["Cache-Control"], "public, max-age=86400")
+                self.assertEqual(b"".join(response.streaming_content), b"RIFFfake-webp")
+
+    def test_missing_media_returns_404(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with override_settings(MEDIA_ROOT=Path(directory), DEBUG=False):
+                response = self.client.get("/media/client_logos/missing.webp")
+                self.assertEqual(response.status_code, 404)
