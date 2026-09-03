@@ -3,6 +3,34 @@ document.addEventListener('DOMContentLoaded', () => {
   const search = document.querySelector('[data-donor-search-input]');
   const status = document.querySelector('[data-donor-status-filter]');
   const empty = document.querySelector('[data-dashboard-no-results]');
+  const expandedStorageKey = 'jpc-expanded-donors';
+  const focusStorageKey = 'jpc-focus-donor';
+
+  let expandedDonors = new Set();
+  try {
+    expandedDonors = new Set(JSON.parse(sessionStorage.getItem(expandedStorageKey) || '[]'));
+  } catch (error) {
+    sessionStorage.removeItem(expandedStorageKey);
+  }
+
+  const persistExpandedDonors = () => {
+    sessionStorage.setItem(expandedStorageKey, JSON.stringify([...expandedDonors]));
+  };
+
+  const setExpanded = (item, expanded) => {
+    const button = item.querySelector('[data-donor-toggle]');
+    const target = button ? document.getElementById(button.getAttribute('aria-controls')) : null;
+    if (!button || !target) return;
+
+    button.setAttribute('aria-expanded', String(expanded));
+    target.hidden = !expanded;
+
+    const donorId = item.dataset.donorId;
+    if (!donorId) return;
+    if (expanded) expandedDonors.add(donorId);
+    else expandedDonors.delete(donorId);
+    persistExpandedDonors();
+  };
 
   const applyFilters = () => {
     if (!items.length) return;
@@ -23,15 +51,42 @@ document.addEventListener('DOMContentLoaded', () => {
   status?.addEventListener('change', applyFilters);
   applyFilters();
 
-  document.querySelectorAll('[data-donor-toggle]').forEach(button => {
-    const target = document.getElementById(button.getAttribute('aria-controls'));
-    if (!target) return;
+  items.forEach(item => {
+    const donorId = item.dataset.donorId;
+    const button = item.querySelector('[data-donor-toggle]');
+    if (!button) return;
+
+    if (donorId && expandedDonors.has(donorId)) {
+      setExpanded(item, true);
+    }
+
     button.addEventListener('click', () => {
-      const expanded = button.getAttribute('aria-expanded') === 'true';
-      button.setAttribute('aria-expanded', String(!expanded));
-      target.hidden = expanded;
+      setExpanded(item, button.getAttribute('aria-expanded') !== 'true');
     });
   });
+
+  document.querySelectorAll('.add-placement').forEach(form => {
+    form.addEventListener('submit', () => {
+      const item = form.closest('[data-donor-id]');
+      const donorId = item?.dataset.donorId;
+      if (!donorId) return;
+      expandedDonors.add(donorId);
+      persistExpandedDonors();
+      sessionStorage.setItem(focusStorageKey, donorId);
+    });
+  });
+
+  const focusDonorId = sessionStorage.getItem(focusStorageKey);
+  if (focusDonorId) {
+    const item = items.find(candidate => candidate.dataset.donorId === focusDonorId);
+    if (item) {
+      setExpanded(item, true);
+      window.requestAnimationFrame(() => {
+        item.scrollIntoView({block: 'center'});
+      });
+    }
+    sessionStorage.removeItem(focusStorageKey);
+  }
 
   document.querySelectorAll('.placement [data-toggle-url]').forEach(input => {
     input.addEventListener('change', () => {
