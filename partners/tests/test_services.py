@@ -235,3 +235,46 @@ class CredentialTests(TestCase):
         donor = DonorSite(encrypted_api_token=encrypt_secret("existing-token"))
         existing = DonorForm(data=data, instance=donor)
         self.assertTrue(existing.is_valid(), existing.errors.as_text())
+
+    def test_joomla3_connector_form_requires_long_token_and_preserves_existing(self):
+        os.environ["CREDENTIAL_ENCRYPTION_KEY"] = "unit-test-key"
+        data = {
+            "name": "D",
+            "domain": "d.test",
+            "admin_url": "https://d.test/administrator/",
+            "page_url": "https://d.test/p",
+            "joomla_version": DonorSite.JoomlaVersion.V3,
+            "auth_mode": DonorSite.AuthMode.CONNECTOR_TOKEN,
+            "username": "",
+            "password": "",
+            "api_url": "",
+            "api_token": "",
+            "connector_url": "",
+            "connector_token": "",
+            "article_id": "46",
+            "article_title": "Partners",
+            "article_category_id": "2",
+            "menu_item_id": "",
+            "article_alias": "partners",
+            "template": "",
+            "enabled": "on",
+            "notes": "",
+        }
+
+        missing = DonorForm(data=data)
+        self.assertFalse(missing.is_valid())
+        self.assertIn("connector_token", missing.errors)
+
+        short_data = {**data, "connector_token": "too-short"}
+        short = DonorForm(data=short_data)
+        self.assertFalse(short.is_valid())
+        self.assertIn("connector_token", short.errors)
+
+        encrypted = encrypt_secret("cd" * 32)
+        donor = DonorSite(encrypted_connector_token=encrypted)
+        existing = DonorForm(data=data, instance=donor)
+        self.assertTrue(existing.is_valid(), existing.errors.as_text())
+
+        html = DonorForm(instance=donor).as_p()
+        self.assertNotIn("cd" * 32, html)
+        self.assertNotIn(encrypted, html)
