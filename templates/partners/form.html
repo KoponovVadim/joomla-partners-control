@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}{{ title }} · JPC{% endblock %}
+{% block extra_head %}{% if kind == 'client' %}<link rel="stylesheet" href="{% static 'partners/client-variants.css' %}"><script src="{% static 'partners/client-variants.js' %}" defer></script>{% endif %}{% endblock %}
 {% block content %}
 <div class="page-head"><div><a class="back" href="{% if kind == 'template' %}{% url 'template-list' %}{% else %}{% url 'dashboard' %}{% endif %}">← Назад</a><h1>{{ title }}</h1></div>{% if kind == 'donor' and object %}<span class="connection {{ object.connection_status }}"><i></i>{{ object.get_connection_status_display }}</span>{% endif %}</div>
 <div class="form-layout {% if kind == 'client' %}with-preview{% endif %}">
@@ -14,7 +15,7 @@
     {% if form.non_field_errors %}<div class="message error">{{ form.non_field_errors }}</div>{% endif %}
     <div class="form-grid">
     {% for field in form %}
-      <div class="field {% if field.name == 'description' or field.name == 'description_override' or field.name == 'default_html' or field.name == 'html_override' or field.name == 'wrapper_html' or field.name == 'item_html' or field.name == 'css' or field.name == 'notes' or field.name == 'logo' %}span-2{% endif %} {% if field.field.widget.input_type == 'checkbox' %}check-field{% endif %}">
+      <div class="field {% if field.name == 'description_override' or field.name == 'default_html' or field.name == 'html_override' or field.name == 'wrapper_html' or field.name == 'item_html' or field.name == 'css' or field.name == 'notes' or field.name == 'logo' %}span-2{% endif %} {% if field.field.widget.input_type == 'checkbox' %}check-field{% endif %}">
         <label for="{{ field.id_for_label }}">{{ field.label }}</label>
         {% if kind == 'client' and field.name == 'logo' %}
           <div class="logo-upload-box">
@@ -34,13 +35,56 @@
       </div>
     {% endfor %}
     </div>
+
+    {% if kind == 'client' and description_formset %}
+    <section class="description-variants" data-description-formset>
+      <div class="description-variants__head">
+        <div><h2>Варианты описания</h2><p>JPC автоматически и стабильно распределяет активные варианты по донорам. На конкретном размещении вариант можно закрепить вручную.</p></div>
+        <button class="btn small" type="button" data-add-description>+ Вариант</button>
+      </div>
+      {{ description_formset.management_form }}
+      {% if description_formset.non_form_errors %}<div class="message error">{{ description_formset.non_form_errors }}</div>{% endif %}
+      <div class="description-variants__list" data-description-list>
+        {% for variant_form in description_formset %}
+        <div class="description-variant" data-description-row>
+          {{ variant_form.id }}
+          <div class="description-variant__name">
+            <label for="{{ variant_form.name.id_for_label }}">Название</label>
+            {{ variant_form.name }}
+            {% for error in variant_form.name.errors %}<small class="error-text">{{ error }}</small>{% endfor %}
+          </div>
+          <div class="description-variant__text">
+            <label for="{{ variant_form.text.id_for_label }}">Текст</label>
+            {{ variant_form.text }}
+            {% for error in variant_form.text.errors %}<small class="error-text">{{ error }}</small>{% endfor %}
+          </div>
+          <div class="description-variant__controls">
+            <label class="variant-enabled">{{ variant_form.enabled }} <span>Использовать</span></label>
+            <span class="variant-delete-field">{{ variant_form.DELETE }}</span>
+            <button class="variant-remove" type="button" data-remove-description>Удалить</button>
+          </div>
+          {% for error in variant_form.non_field_errors %}<small class="error-text">{{ error }}</small>{% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+      <template data-description-empty>
+        <div class="description-variant" data-description-row>
+          {{ description_formset.empty_form.id }}
+          <div class="description-variant__name"><label>Название</label>{{ description_formset.empty_form.name }}</div>
+          <div class="description-variant__text"><label>Текст</label>{{ description_formset.empty_form.text }}</div>
+          <div class="description-variant__controls"><label class="variant-enabled">{{ description_formset.empty_form.enabled }} <span>Использовать</span></label><span class="variant-delete-field">{{ description_formset.empty_form.DELETE }}</span><button class="variant-remove" type="button" data-remove-description>Удалить</button></div>
+        </div>
+      </template>
+    </section>
+    {% endif %}
+
     {% if kind == 'donor' and object and object.password_is_set %}<p class="saved-note">✓ Пароль сохранён в зашифрованном виде</p>{% endif %}
     {% if kind == 'donor' and object and object.api_token_is_set %}<p class="saved-note">✓ API Token сохранён в зашифрованном виде</p>{% endif %}
     {% if kind == 'donor' and object and object.connector_token_is_set %}<p class="saved-note">✓ JPC Connector Token сохранён в зашифрованном виде</p>{% endif %}
     {% if kind == 'donor' and object and not object.article_id %}<p class="muted small-text">ID материала не указан: при первой синхронизации Joomla попробует создать новый материал с заданными заголовком, alias и категорией.</p>{% endif %}
     <div class="form-actions"><button class="btn primary">Сохранить</button><a class="btn" href="{% if kind == 'template' %}{% url 'template-list' %}{% else %}{% url 'dashboard' %}{% endif %}">Отмена</a></div>
   </form>
-  {% if kind == 'client' %}<aside class="panel live-preview"><div class="section-label">Предпросмотр описания</div><iframe title="Предпросмотр клиента" sandbox="allow-popups"></iframe><p class="muted small-text">Для обычного текста ссылка формируется автоматически. Расширенный HTML в итоговом материале нормализуется до одной текстовой ссылки.</p></aside>{% endif %}
+  {% if kind == 'client' %}<aside class="panel live-preview"><div class="section-label">Предпросмотр описания</div><iframe title="Предпросмотр клиента" sandbox="allow-popups"></iframe><p class="muted small-text">Предпросмотр показывает первый активный вариант. На донорах JPC распределяет варианты автоматически или использует закреплённый вариант.</p></aside>{% endif %}
 </div>
 {% if kind == 'donor' and object %}
 <div class="standalone-action actions"><form method="post" action="{% url 'donor-test' object.pk %}">{% csrf_token %}<button class="btn">Проверить подключение</button></form>{% if object.joomla_version != 'unknown' and object.article_id %}<form method="post" action="{% url 'donor-adopt' object.pk %}" data-confirm="Будет сохранена резервная копия HTML и в материал добавится невидимый managed-marker. Продолжить?">{% csrf_token %}<button class="btn">Принять материал под управление</button></form>{% endif %}</div>
