@@ -22,4 +22,4 @@ class DashboardStateTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, f'data-donor-id="{self.donor.pk}"')
         self.assertContains(response, f'aria-controls="donor-detail-{self.donor.pk}"')
-        self.assertContains(response, "partners/dashboard.js")
+        self.assertContains(response, "/static/partners/dashboard.")
