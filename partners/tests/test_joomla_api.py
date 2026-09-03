@@ -45,7 +45,7 @@ class MockTransportMixin:
             if status:
                 return httpx.Response(
                     status,
-                    json={"errors": [{"detail": "mock denial"}]},
+                    json={"errors": [{"detail": "mock denial test-api-token"}]},
                     request=request,
                 )
 
@@ -284,12 +284,10 @@ class JoomlaApiAdapterTests(TestCase):
         for status, exception, message in cases:
             with self.subTest(status=status):
                 self.state["error_status"] = status
-                with self.assertRaisesRegex(exception, message):
+                with self.assertRaisesRegex(exception, message) as raised:
                     self.adapter().test_connection()
-        self.assertNotIn(
-            "test-api-token",
-            "\n".join(str(request.url) for request in self.adapter().requests),
-        )
+                self.assertNotIn("test-api-token", str(raised.exception))
+                self.assertIn("[REDACTED]", str(raised.exception))
 
     def test_joomla5_uses_same_web_services_contract(self):
         self.donor.joomla_version = DonorSite.JoomlaVersion.V5
