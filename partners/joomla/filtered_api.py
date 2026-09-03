@@ -23,7 +23,7 @@ class JoomlaFilteredMarkerApiAdapter(JoomlaApiAdapter):
 
     Joomla's API HTML filtering may remove HTML comments from article text.
     JPC keeps comments as its canonical internal representation, but stores the
-    marker in Joomla 4/5 as an empty hidden span with a unique id. The span is
+    marker in Joomla 5 as an empty hidden span with a unique id. The span is
     converted back to the canonical comment immediately after every API read,
     so the rest of JPC does not need Joomla-version-specific marker logic.
     """
@@ -61,9 +61,18 @@ class JoomlaFilteredMarkerApiAdapter(JoomlaApiAdapter):
     @classmethod
     def _article_from_resource(cls, resource):
         article = super()._article_from_resource(resource)
+
+        # Joomla 5 Web Services returns the actual article body in `text`.
+        # `articletext`/`introtext`/`fulltext` may be absent entirely, so the
+        # generic API parser can otherwise see an empty body and falsely report
+        # that the managed marker disappeared even though Joomla stored it.
+        attributes = resource.get("attributes") if isinstance(resource, dict) else None
+        api_text = attributes.get("text") if isinstance(attributes, dict) else None
+        body_html = api_text if isinstance(api_text, str) else article.body_html
+
         return JoomlaApiArticle(
             article_id=article.article_id,
             title=article.title,
             alias=article.alias,
-            body_html=cls._html_for_jpc(article.body_html),
+            body_html=cls._html_for_jpc(body_html),
         )
