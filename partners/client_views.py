@@ -1,3 +1,5 @@
+from html import escape
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -26,36 +28,41 @@ def client_edit(request, pk=None):
                 variants.instance = client
                 variants.save()
             else:
-                # Backward compatibility for old forms/scripts that still send one
-                # plain `description` field and know nothing about the formset.
-                legacy_description = request.POST.get("description", "").strip()
-                if legacy_description and not client.description_variants.exists():
+                # Совместимость со старыми формами/скриптами.
+                legacy_html = request.POST.get("default_html", "").strip()
+                if not legacy_html:
+                    legacy_text = request.POST.get("description", "").strip()
+                    if legacy_text:
+                        legacy_html = escape(legacy_text).replace("\r\n", "\n").replace("\n", "<br>\n")
+                if legacy_html and not client.description_variants.exists():
                     client.description_variants.create(
                         name="Основное",
-                        text=legacy_description,
+                        html=legacy_html,
                         position=1,
                         enabled=True,
                     )
 
-            active = list(client.description_variants.order_by("position", "id"))
-            for position, variant in enumerate(active, start=1):
+            all_variants = list(client.description_variants.order_by("position", "id"))
+            changed = []
+            for position, variant in enumerate(all_variants, start=1):
                 if variant.position != position:
                     variant.position = position
-            if active:
-                client.description_variants.model.objects.bulk_update(active, ["position"])
+                    changed.append(variant)
+            if changed:
+                client.description_variants.model.objects.bulk_update(changed, ["position"])
 
-            # Keep the legacy field synchronized as a fallback for old code/data.
-            fallback = next(
-                (variant.text for variant in active if variant.enabled and variant.text.strip()),
+            # Legacy fallback синхронизируем с первым активным HTML-вариантом.
+            fallback_html = next(
+                (variant.html for variant in all_variants if variant.enabled and variant.html.strip()),
                 "",
             )
-            if client.description != fallback:
-                client.description = fallback
-                client.save(update_fields=["description", "updated_at"])
+            if client.default_html != fallback_html:
+                client.default_html = fallback_html
+                client.save(update_fields=["default_html", "updated_at"])
 
         messages.success(
             request,
-            f"Клиент сохранён. Вариантов описания: {client.description_variants.filter(enabled=True).count()}.",
+            f"Клиент сохранён. HTML-вариантов: {client.description_variants.filter(enabled=True).count()}.",
         )
         return redirect("client-edit", pk=client.pk)
 
