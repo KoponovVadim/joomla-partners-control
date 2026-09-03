@@ -5,6 +5,6 @@ __pycache__/
 *.sqlite3
 staticfiles/
 media/
+static/partners/downloads/plg_ajax_jpcconnector-1.0.0.zip
 .idea/
 .vscode/
-
