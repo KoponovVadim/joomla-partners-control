@@ -87,8 +87,7 @@ def _link_attributes(placement):
     return (" " + " ".join(attrs)) if attrs else ""
 
 
-def _apply_link_attributes(link, url, placement):
-    link["href"] = url
+def _apply_common_link_attributes(link, placement):
     link.attrs.pop("target", None)
     link.attrs.pop("rel", None)
     if placement.target_blank:
@@ -96,6 +95,11 @@ def _apply_link_attributes(link, url, placement):
     rel = _link_rel(placement)
     if rel:
         link["rel"] = rel
+
+
+def _apply_link_attributes(link, url, placement):
+    link["href"] = url
+    _apply_common_link_attributes(link, placement)
 
 
 def _text_link_html(url, link_text, placement):
@@ -113,8 +117,46 @@ def _plain_client_html(description, link_text, url, placement):
     return description_html + separator + _text_link_html(url, link_text, placement)
 
 
-def _advanced_client_html(value, link_text, url, placement):
-    soup = BeautifulSoup(value, "html.parser")
+def _normalize_fragment_link(href, client_url):
+    value = (href or "").strip()
+    if not value:
+        return client_url
+    lowered = value.lower()
+    if lowered.startswith(("javascript:", "data:")):
+        raise ValueError("HTML описания содержит небезопасную ссылку")
+    if value.startswith(("#", "mailto:", "tel:")):
+        return value
+    parsed = urlparse(value)
+    if parsed.scheme:
+        if parsed.scheme not in {"http", "https"}:
+            raise ValueError("HTML описания содержит неподдерживаемый протокол ссылки")
+        return value
+    return urljoin(client_url.rstrip("/") + "/", value)
+
+
+def _html_fragment(value, link_text, url, placement):
+    soup = BeautifulSoup(value or "", "html.parser")
+    links = list(soup.find_all("a"))
+
+    if not links:
+        if soup.contents:
+            soup.append(" ")
+        link = soup.new_tag("a")
+        link.string = link_text
+        _apply_link_attributes(link, url, placement)
+        soup.append(link)
+    else:
+        for link in links:
+            link["href"] = _normalize_fragment_link(link.get("href"), url)
+            _apply_common_link_attributes(link, placement)
+
+    return str(soup)
+
+
+def _legacy_advanced_client_html(value, link_text, url, placement):
+    """Keep old default_html behavior for data that has not migrated yet."""
+
+    soup = BeautifulSoup(value or "", "html.parser")
     links = list(soup.find_all("a"))
     text_link = next((link for link in links if link.find("img") is None), None)
 
@@ -140,31 +182,28 @@ def _active_description_variants(client):
     return [
         variant
         for variant in client.description_variants.all()
-        if variant.enabled and variant.text.strip()
+        if variant.enabled and variant.html.strip()
     ]
 
 
-def _description_for_placement(placement):
-    if placement.description_override.strip():
-        return placement.description_override
-
+def _variant_html_for_placement(placement):
     pinned = placement.description_variant
     if (
         pinned is not None
         and pinned.client_id == placement.client_id
         and pinned.enabled
-        and pinned.text.strip()
+        and pinned.html.strip()
     ):
-        return pinned.text
+        return pinned.html
 
     variants = _active_description_variants(placement.client)
     if variants:
         donor_key = placement.donor.domain.strip().lower() if placement.donor_id else ""
         seed = f"{placement.client_id}:{donor_key}".encode()
         index = int.from_bytes(sha256(seed).digest()[:8], "big") % len(variants)
-        return variants[index].text
+        return variants[index].html
 
-    return placement.client.description
+    return ""
 
 
 def _client_html(placement, url):
@@ -174,16 +213,26 @@ def _client_html(placement, url):
         or client.link_text.strip()
         or client.name
     )
-    advanced_html = placement.html_override or client.default_html
-    if advanced_html:
-        return _advanced_client_html(advanced_html, link_text, url, placement)
 
-    return _plain_client_html(
-        _description_for_placement(placement),
-        link_text,
-        url,
-        placement,
-    )
+    if placement.html_override.strip():
+        return _html_fragment(placement.html_override, link_text, url, placement)
+
+    if placement.description_override.strip():
+        return _plain_client_html(
+            placement.description_override,
+            link_text,
+            url,
+            placement,
+        )
+
+    variant_html = _variant_html_for_placement(placement)
+    if variant_html:
+        return _html_fragment(variant_html, link_text, url, placement)
+
+    if client.default_html.strip():
+        return _legacy_advanced_client_html(client.default_html, link_text, url, placement)
+
+    return _plain_client_html(client.description, link_text, url, placement)
 
 
 def _validate_partner_item(item_html, template_name, client_name, expected_url):
@@ -196,17 +245,16 @@ def _validate_partner_item(item_html, template_name, client_name, expected_url):
 
     valid = (
         len(items) == 1
-        and len(links) == 2
         and len(image_links) == 1
-        and len(text_links) == 1
+        and len(text_links) >= 1
         and not nested_link
-        and all(link.get("href") == expected_url for link in links)
+        and image_links[0].get("href") == expected_url
     )
     if not valid:
         raise ValueError(
             f"Шаблон «{template_name}» не может сформировать партнёра «{client_name}»: "
-            "каждый <li> должен содержать ровно две ненаслаивающиеся ссылки на URL клиента — "
-            "одну вокруг картинки и одну в текстовом описании."
+            "каждый <li> должен содержать ровно две группы ссылок — одну вокруг картинки "
+            "и одну или несколько текстовых ссылок в HTML описания."
         )
 
 

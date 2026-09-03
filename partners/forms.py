@@ -36,7 +36,6 @@ class DonorForm(StyledModelForm):
             "в зашифрованном виде. Оставьте пустым, чтобы сохранить текущий."
         ),
     )
-
     connector_token = forms.CharField(
         label="JPC Connector Token",
         required=False,
@@ -127,26 +126,7 @@ class ClientForm(StyledModelForm):
 
     class Meta:
         model = ClientSite
-        fields = [
-            "name",
-            "domain",
-            "logo",
-            "link_text",
-            "default_html",
-            "notes",
-            "enabled",
-        ]
-        widgets = {
-            "default_html": forms.Textarea(attrs={"rows": 8, "class": "input code-editor"}),
-            "notes": forms.Textarea(attrs={"rows": 3}),
-        }
-        help_texts = {
-            "default_html": (
-                "Расширенный режим для старой или сложной разметки. Если поле заполнено, оно имеет "
-                "приоритет над всеми вариантами текстового описания; JPC оставит в нём одну текстовую "
-                "ссылку и приведёт её URL и атрибуты к настройкам клиента."
-            )
-        }
+        fields = ["name", "domain", "logo", "enabled"]
 
     def clean_logo(self):
         logo = self.cleaned_data.get("logo")
@@ -158,10 +138,17 @@ class ClientForm(StyledModelForm):
 class ClientDescriptionVariantForm(StyledModelForm):
     class Meta:
         model = ClientDescriptionVariant
-        fields = ["name", "text", "enabled"]
+        fields = ["name", "html", "enabled"]
         widgets = {
             "name": forms.TextInput(attrs={"placeholder": "Например: Основное"}),
-            "text": forms.Textarea(attrs={"rows": 4, "placeholder": "Текст описания клиента…"}),
+            "html": forms.Textarea(
+                attrs={
+                    "rows": 9,
+                    "class": "input code-editor",
+                    "placeholder": "<h3>...</h3>\n<p>HTML описания клиента...</p>",
+                    "spellcheck": "false",
+                }
+            ),
         }
 
 
@@ -215,18 +202,17 @@ class PlacementForm(StyledModelForm):
         }
         help_texts = {
             "description_variant": (
-                "Авто — JPC выбирает один из активных вариантов клиента стабильно для этого донора. "
+                "Авто — JPC выбирает один из активных HTML-вариантов клиента стабильно для этого донора. "
                 "Можно закрепить конкретный вариант вручную."
             ),
             "description_override": (
-                "Необязательный ручной текст только для этого донора. Имеет приоритет над выбранным вариантом."
+                "Legacy: необязательный простой текст только для этого донора. HTML задавайте полем ниже."
             ),
             "link_text_override": (
-                "Оставьте пустым, чтобы использовать текст ссылки из карточки клиента."
+                "Legacy: используется только если HTML не содержит собственной текстовой ссылки."
             ),
             "html_override": (
-                "Расширенный режим только для этого донора. Имеет приоритет над обычным описанием; "
-                "JPC нормализует ссылки до одной текстовой."
+                "HTML только для этого донора. Имеет приоритет над выбранным вариантом клиента."
             ),
             "image_override": (
                 "Оставьте пустым, чтобы автоматически использовать картинку, загруженную в карточке клиента. "

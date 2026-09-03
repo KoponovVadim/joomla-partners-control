@@ -18,13 +18,13 @@ class PlacementInline(admin.TabularInline):
 class ClientDescriptionVariantInline(admin.StackedInline):
     model = ClientDescriptionVariant
     extra = 1
-    fields = ("name", "text", "enabled", "position")
+    fields = ("name", "html", "enabled", "position")
 
 
 @admin.register(DonorSite)
 class DonorAdmin(admin.ModelAdmin):
-    list_display = ("domain", "joomla_version", "connection_status", "enabled", "last_published_at")
-    list_filter = ("joomla_version", "connection_status", "enabled")
+    list_display = ("domain", "joomla_version", "page_http_status", "page_checked_at", "enabled")
+    list_filter = ("joomla_version", "page_http_status", "enabled")
     search_fields = ("name", "domain")
     exclude = ("encrypted_password", "encrypted_api_token", "encrypted_connector_token")
     inlines = [PlacementInline]

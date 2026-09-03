@@ -19,4 +19,5 @@ esac
 python manage.py migrate --noinput
 python scripts/build_joomla_connector.py
 python manage.py collectstatic --noinput
+python manage.py monitor_partner_pages --interval "${PAGE_CHECK_INTERVAL_SECONDS:-900}" &
 exec gunicorn jpc.wsgi:application --bind 0.0.0.0:8000 --workers "${GUNICORN_WORKERS:-3}" --timeout 60 --access-logfile -

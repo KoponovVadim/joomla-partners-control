@@ -101,6 +101,10 @@ class DonorSite(TimeStampedModel):
     )
     last_checked_at = models.DateTimeField(null=True, blank=True)
     last_published_at = models.DateTimeField(null=True, blank=True)
+    page_http_status = models.PositiveSmallIntegerField("HTTP статус страницы", null=True, blank=True)
+    page_checked_at = models.DateTimeField("Страница проверена", null=True, blank=True)
+    page_unhealthy_since = models.DateTimeField("Ошибка страницы с", null=True, blank=True)
+    page_check_error = models.TextField("Ошибка проверки страницы", blank=True)
     notes = models.TextField("Заметки", blank=True)
     managed_marker_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
 
@@ -112,6 +116,27 @@ class DonorSite(TimeStampedModel):
 
     def get_absolute_url(self):
         return reverse("donor-edit", args=[self.pk])
+
+    @property
+    def homepage_url(self):
+        value = self.domain.strip()
+        if value.startswith(("http://", "https://")):
+            return value
+        return f"https://{value.strip('/')}"
+
+    @property
+    def page_health_state(self):
+        if not self.enabled:
+            return "disabled"
+        if self.page_checked_at is None:
+            return "unknown"
+        if self.page_http_status is None:
+            return "error"
+        if 200 <= self.page_http_status < 400:
+            return "ok"
+        if self.page_http_status == 404:
+            return "not_found"
+        return "error"
 
     @property
     def password_is_set(self):
@@ -133,20 +158,18 @@ class ClientSite(TimeStampedModel):
     description = models.TextField(
         "Текстовое описание",
         blank=True,
-        help_text=(
-            "Legacy fallback. Новые описания редактируются через варианты описания."
-        ),
+        help_text="Legacy fallback. Новые описания редактируются через HTML-варианты.",
     )
     link_text = models.CharField(
         "Текст ссылки",
         max_length=255,
         blank=True,
-        help_text="Например: «Перейти на сайт». Если не заполнено, используется название клиента.",
+        help_text="Legacy fallback.",
     )
     default_html = models.TextField(
         "Расширенный HTML",
         blank=True,
-        help_text="Необязательный режим для существующей сложной разметки.",
+        help_text="Legacy fallback. Новые HTML описания хранятся в вариантах.",
     )
     enabled = models.BooleanField("Активен", default=True)
     notes = models.TextField("Заметки", blank=True)
@@ -173,9 +196,9 @@ class ClientDescriptionVariant(TimeStampedModel):
         blank=True,
         help_text="Например: Основное, Короткое, Нейтральное.",
     )
-    text = models.TextField(
-        "Описание",
-        help_text="Обычный текст без HTML. Переносы строк сохраняются.",
+    html = models.TextField(
+        "HTML описания",
+        help_text="HTML-фрагмент, который JPC вставляет в текстовую часть карточки партнёра.",
     )
     position = models.PositiveIntegerField(default=0)
     enabled = models.BooleanField("Использовать", default=True)
