@@ -64,7 +64,11 @@ class MockTransportMixin:
                 self.state["creates"] += 1
                 self.state["id"] = self.state.get("new_id", 91)
                 self.state["title"] = payload["title"]
-                self.state["alias"] = payload["alias"] or "partners-generated"
+                self.state["alias"] = (
+                    self.state.get("response_alias")
+                    or payload["alias"]
+                    or "partners-generated"
+                )
                 self.state["introtext"] = payload["articletext"]
                 self.state["fulltext"] = ""
                 if self.state.get("drop_marker_after_write"):
@@ -185,6 +189,7 @@ class JoomlaApiAdapterTests(TestCase):
     def test_create_persists_id_and_alias_before_marker_verification(self):
         self.donor.article_id = None
         self.state["new_id"] = 91
+        self.state["response_alias"] = "partners-generated"
         self.state["drop_marker_after_write"] = True
         adapter = self.adapter()
 
