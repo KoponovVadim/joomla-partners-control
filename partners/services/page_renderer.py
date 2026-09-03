@@ -136,6 +136,37 @@ def _advanced_client_html(value, link_text, url, placement):
     return str(soup)
 
 
+def _active_description_variants(client):
+    return [
+        variant
+        for variant in client.description_variants.all()
+        if variant.enabled and variant.text.strip()
+    ]
+
+
+def _description_for_placement(placement):
+    if placement.description_override.strip():
+        return placement.description_override
+
+    pinned = placement.description_variant
+    if (
+        pinned is not None
+        and pinned.client_id == placement.client_id
+        and pinned.enabled
+        and pinned.text.strip()
+    ):
+        return pinned.text
+
+    variants = _active_description_variants(placement.client)
+    if variants:
+        donor_key = placement.donor.domain.strip().lower() if placement.donor_id else ""
+        seed = f"{placement.client_id}:{donor_key}".encode()
+        index = int.from_bytes(sha256(seed).digest()[:8], "big") % len(variants)
+        return variants[index].text
+
+    return placement.client.description
+
+
 def _client_html(placement, url):
     client = placement.client
     link_text = (
@@ -147,8 +178,12 @@ def _client_html(placement, url):
     if advanced_html:
         return _advanced_client_html(advanced_html, link_text, url, placement)
 
-    description = placement.description_override or client.description
-    return _plain_client_html(description, link_text, url, placement)
+    return _plain_client_html(
+        _description_for_placement(placement),
+        link_text,
+        url,
+        placement,
+    )
 
 
 def _validate_partner_item(item_html, template_name, client_name, expected_url):
@@ -182,7 +217,8 @@ def render_page(donor, placements=None, page_template=None):
     placements = (
         placements
         if placements is not None
-        else donor.placements.select_related("client")
+        else donor.placements.select_related("client", "description_variant")
+        .prefetch_related("client__description_variants")
         .filter(enabled=True, client__enabled=True)
         .order_by("position", "id")
     )
