@@ -16,7 +16,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }));
   document.querySelectorAll('[data-remove-url]').forEach(button => button.addEventListener('click', async () => {
     if (!confirm('Убрать клиента только с этого донора? Сам клиент останется в системе.')) return;
-    try { await post(button.dataset.removeUrl); button.closest('.placement').remove(); } catch (_) { alert('Не удалось убрать размещение'); }
+    try {
+      await post(button.dataset.removeUrl);
+      if (document.querySelector('[data-donor-sheet]')) window.location.reload();
+      else button.closest('.placement').remove();
+    } catch (_) { alert('Не удалось убрать размещение'); }
   }));
   document.querySelectorAll('.placement-list').forEach(list => {
     let dragged;
@@ -25,7 +29,10 @@ document.addEventListener('DOMContentLoaded', () => {
       item.addEventListener('dragend', async () => {
         item.classList.remove('dragging');
         const ids = [...list.querySelectorAll('[data-placement-id]')].map(el => Number(el.dataset.placementId));
-        try { await post(list.dataset.reorderUrl, {headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ids})}); } catch (_) { alert('Порядок не сохранён'); }
+        try {
+          await post(list.dataset.reorderUrl, {headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ids})});
+          if (document.querySelector('[data-donor-sheet]')) window.location.reload();
+        } catch (_) { alert('Порядок не сохранён'); }
       });
       item.addEventListener('dragover', event => { event.preventDefault(); if (dragged !== item) { const box = item.getBoundingClientRect(); list.insertBefore(dragged, event.clientY < box.top + box.height / 2 ? item : item.nextSibling); } });
     });
