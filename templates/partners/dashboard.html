@@ -1,28 +1,22 @@
 {% extends "base.html" %}
+{% load static %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'partners/dashboard.css' %}"><script src="{% static 'partners/dashboard.js' %}" defer></script>{% endblock %}
 {% block shell_class %}dashboard-shell{% endblock %}
 {% block content %}
 {% if mode == 'clients' %}
 <section class="dashboard-toolbar">
   <div class="dashboard-toolbar__group">
     <a class="btn" href="{% url 'dashboard' %}">← Доноры</a>
-    <form class="dashboard-search" method="get">
-      <input type="hidden" name="mode" value="clients">
-      <input name="q" value="{{ query }}" placeholder="Поиск по клиенту или домену">
-    </form>
+    <form class="dashboard-search" method="get"><input type="hidden" name="mode" value="clients"><input name="q" value="{{ query }}" placeholder="Поиск по клиенту или домену"></form>
   </div>
-  <div class="actions">
-    <a class="btn" href="{% url 'template-list' %}">Шаблоны</a>
-    <a class="btn primary" href="{% url 'client-create' %}">+ Клиент</a>
-  </div>
+  <div class="actions"><a class="btn" href="{% url 'template-list' %}">Шаблоны</a><a class="btn primary" href="{% url 'client-create' %}">+ Клиент</a></div>
 </section>
 <div class="client-grid dashboard-client-grid">
 {% for client in clients %}
   <article class="client-card {% if not client.enabled %}is-disabled{% endif %}">
     <div class="card-title"><div>{% if client.logo %}<img class="client-logo" src="{{ client.logo.url }}" alt="">{% else %}<span class="avatar">{{ client.name|slice:':1' }}</span>{% endif %}</div><div><h2>{{ client.name }}</h2><a href="{{ client.domain }}" target="_blank" rel="noopener">{{ client.domain }}</a></div><span class="badge {% if client.enabled %}success{% else %}muted-badge{% endif %}">{% if client.enabled %}активен{% else %}архив{% endif %}</span></div>
     <div class="metric"><strong>{{ client.placement_count }}</strong><span>размещений</span></div>
-    <ul class="compact-list">
-      {% for placement in client.placements.all %}<li><span class="status-dot {% if placement.enabled %}online{% else %}off{% endif %}"></span><a href="{% url 'dashboard' %}?q={{ placement.donor.domain|urlencode }}">{{ placement.donor.domain }}</a><a class="mini-link" href="{% url 'placement-edit' placement.pk %}">настроить</a></li>{% empty %}<li class="muted">Размещений пока нет</li>{% endfor %}
-    </ul>
+    <ul class="compact-list">{% for placement in client.placements.all %}<li><span class="status-dot {% if placement.enabled %}online{% else %}off{% endif %}"></span><a href="{% url 'dashboard' %}?q={{ placement.donor.domain|urlencode }}">{{ placement.donor.domain }}</a><a class="mini-link" href="{% url 'placement-edit' placement.pk %}">настроить</a></li>{% empty %}<li class="muted">Размещений пока нет</li>{% endfor %}</ul>
     <div class="card-actions"><a class="btn small" href="{% url 'client-edit' client.pk %}">Редактировать</a>{% if client.enabled %}<form method="post" action="{% url 'client-archive' client.pk %}" data-confirm="Архивировать клиента? Размещения сохранятся.">{% csrf_token %}<button class="btn small danger-quiet">В архив</button></form>{% endif %}</div>
   </article>
 {% empty %}<div class="empty"><h2>Клиентов пока нет</h2><p>Создайте первого клиента и добавьте его к донору.</p><a class="btn primary" href="{% url 'client-create' %}">+ Клиент</a></div>{% endfor %}
@@ -33,81 +27,32 @@
     <label class="dashboard-search"><span class="sr-only">Поиск</span><input type="search" value="{{ query }}" placeholder="Поиск по донору…" data-donor-search-input></label>
     <label><span class="sr-only">Статус</span><select class="dashboard-status-filter" data-donor-status-filter><option value="all">Все статусы</option><option value="online">Online</option><option value="error">Ошибка</option><option value="unknown">Не проверено</option><option value="not_implemented">Не реализовано</option><option value="disabled">Выключены</option></select></label>
   </div>
-  <div class="actions dashboard-actions-main">
-    <a class="btn" href="?mode=clients">Клиенты</a>
-    <a class="btn" href="{% url 'template-list' %}">Шаблоны</a>
-    <a class="btn" href="{% url 'client-create' %}">+ Клиент</a>
-    <a class="btn primary" href="{% url 'donor-create' %}">+ Донор</a>
-  </div>
+  <div class="actions dashboard-actions-main"><a class="btn" href="?mode=clients">Клиенты</a><a class="btn" href="{% url 'template-list' %}">Шаблоны</a><a class="btn" href="{% url 'client-create' %}">+ Клиент</a><a class="btn primary" href="{% url 'donor-create' %}">+ Донор</a></div>
 </section>
-
-<div class="donor-sheet-scroll">
-  <div class="donor-sheet" data-donor-sheet>
-    <div class="donor-sheet__header donor-sheet__grid" aria-hidden="true">
-      <span></span><strong>Донор</strong><strong>Клиенты</strong><strong>Статус</strong><strong>Последняя публикация</strong><strong>Паразит 1</strong><strong>Паразит 2</strong><strong>Паразит 3</strong><strong>Паразит 4</strong><strong>Паразит 5</strong><strong></strong>
+<div class="donor-sheet-scroll"><div class="donor-sheet" data-donor-sheet>
+  <div class="donor-sheet__header donor-sheet__grid" aria-hidden="true"><span></span><strong>Донор</strong><strong>Клиенты</strong><strong>Статус</strong><strong>Последняя публикация</strong><strong>Паразит 1</strong><strong>Паразит 2</strong><strong>Паразит 3</strong><strong>Паразит 4</strong><strong>Паразит 5</strong><strong></strong></div>
+  {% for donor in donors %}
+  <article class="donor-sheet__item {% if not donor.enabled %}is-disabled{% endif %}" data-donor-item data-donor-search="{{ donor.domain|lower }} {{ donor.name|lower }}" data-donor-status="{% if not donor.enabled %}disabled{% else %}{{ donor.connection_status }}{% endif %}">
+    <div class="donor-sheet__row donor-sheet__grid">
+      <button class="donor-expand" type="button" data-donor-toggle aria-expanded="false" aria-controls="donor-detail-{{ donor.pk }}" title="Развернуть">›</button>
+      <div class="donor-main-cell"><a class="donor-domain" href="{{ donor.page_url }}" target="_blank" rel="noopener">{{ donor.domain }} <span aria-hidden="true">↗</span></a><small>Joomla {{ donor.joomla_version }}{% if donor.article_id %} · материал #{{ donor.article_id }}{% endif %}</small></div>
+      <div class="donor-count">{{ donor.placements.all|length }}</div>
+      <div>{% if not donor.enabled %}<span class="sheet-status muted-badge">Выключен</span>{% elif donor.connection_status == 'online' %}<span class="sheet-status success">Online</span>{% elif donor.connection_status == 'error' %}<span class="sheet-status error">Ошибка</span>{% elif donor.connection_status == 'not_implemented' %}<span class="sheet-status warning">Не реализовано</span>{% else %}<span class="sheet-status muted-badge">Не проверено</span>{% endif %}</div>
+      <div class="sheet-date">{% if donor.last_published_at %}{{ donor.last_published_at|date:'d.m.Y H:i' }}{% else %}<span class="muted">—</span>{% endif %}</div>
+      {% for placement in donor.placements.all|slice:':5' %}<div class="parasite-cell {% if not placement.enabled %}is-disabled{% endif %}" style="grid-column:{{ forloop.counter|add:5 }}" data-placement-summary-id="{{ placement.pk }}"><a href="{{ placement.url_override|default:placement.client.domain }}" target="_blank" rel="noopener">{{ placement.client.name }}</a><small>{{ placement.url_override|default:placement.client.domain }}</small></div>{% endfor %}
+      <details class="row-menu" style="grid-column:11"><summary title="Действия">⋮</summary><div class="row-menu__panel"><a href="{% url 'donor-edit' donor.pk %}">Настройки</a><a href="{% url 'donor-preview' donor.pk %}">Предпросмотр</a><form method="post" action="{% url 'donor-sync' donor.pk %}">{% csrf_token %}<button>Синхронизировать</button></form></div></details>
     </div>
-    {% for donor in donors %}
-    <article class="donor-sheet__item {% if not donor.enabled %}is-disabled{% endif %}" data-donor-item data-donor-search="{{ donor.domain|lower }} {{ donor.name|lower }}" data-donor-status="{% if not donor.enabled %}disabled{% else %}{{ donor.connection_status }}{% endif %}">
-      <div class="donor-sheet__row donor-sheet__grid">
-        <button class="donor-expand" type="button" data-donor-toggle aria-expanded="false" aria-controls="donor-detail-{{ donor.pk }}" title="Развернуть">›</button>
-        <div class="donor-main-cell">
-          <a class="donor-domain" href="{{ donor.page_url }}" target="_blank" rel="noopener">{{ donor.domain }} <span aria-hidden="true">↗</span></a>
-          <small>Joomla {{ donor.joomla_version }}{% if donor.article_id %} · материал #{{ donor.article_id }}{% endif %}</small>
-        </div>
-        <div class="donor-count">{{ donor.placements.all|length }}</div>
-        <div>
-          {% if not donor.enabled %}<span class="sheet-status muted-badge">Выключен</span>
-          {% elif donor.connection_status == 'online' %}<span class="sheet-status success">Online</span>
-          {% elif donor.connection_status == 'error' %}<span class="sheet-status error">Ошибка</span>
-          {% elif donor.connection_status == 'not_implemented' %}<span class="sheet-status warning">Не реализовано</span>
-          {% else %}<span class="sheet-status muted-badge">Не проверено</span>{% endif %}
-        </div>
-        <div class="sheet-date">{% if donor.last_published_at %}{{ donor.last_published_at|date:'d.m.Y H:i' }}{% else %}<span class="muted">—</span>{% endif %}</div>
-        {% for placement in donor.placements.all|slice:':5' %}
-        <div class="parasite-cell {% if not placement.enabled %}is-disabled{% endif %}" style="grid-column:{{ forloop.counter|add:5 }}" data-placement-summary-id="{{ placement.pk }}">
-          <a href="{{ placement.url_override|default:placement.client.domain }}" target="_blank" rel="noopener">{{ placement.client.name }}</a>
-          <small>{{ placement.url_override|default:placement.client.domain }}</small>
-        </div>
-        {% endfor %}
-        <details class="row-menu" style="grid-column:11">
-          <summary title="Действия">⋮</summary>
-          <div class="row-menu__panel">
-            <a href="{% url 'donor-edit' donor.pk %}">Настройки</a>
-            <a href="{% url 'donor-preview' donor.pk %}">Предпросмотр</a>
-            <form method="post" action="{% url 'donor-sync' donor.pk %}">{% csrf_token %}<button>Синхронизировать</button></form>
-          </div>
-        </details>
-      </div>
-      <div class="donor-sheet__details" id="donor-detail-{{ donor.pk }}" data-donor-detail hidden>
-        <div class="donor-detail-meta">
-          <span><b>Страница:</b> <a href="{{ donor.page_url }}" target="_blank" rel="noopener">{{ donor.page_url }}</a></span>
-          <span><b>Материал:</b> {% if donor.article_id %}#{{ donor.article_id }}{% else %}—{% endif %}</span>
-          <span><b>Меню:</b> {% if donor.menu_item_id %}#{{ donor.menu_item_id }}{% else %}—{% endif %}</span>
-          <span><b>Проверка:</b> {% if donor.last_checked_at %}{{ donor.last_checked_at|date:'d.m.Y H:i' }}{% else %}—{% endif %}</span>
-        </div>
-        <div class="placement-detail-head"><span></span><span>Слот</span><span>Клиент</span><span>URL</span><span>Статус</span><span></span><span></span></div>
-        <ul class="placement-list placement-detail-list" data-reorder-url="{% url 'placements-reorder' %}">
-          {% for placement in donor.placements.all %}
-          <li draggable="true" data-placement-id="{{ placement.pk }}" class="placement {% if not placement.enabled %}is-disabled{% endif %}">
-            <span class="drag" title="Перетащить">⠿</span>
-            <span class="placement-slot">{{ forloop.counter }}</span>
-            <span class="placement-name">{{ placement.client.name }}{% if placement.html_override %} <span class="badge warning" title="Задан индивидуальный HTML">override</span>{% endif %}<small>{{ placement.client.domain }}</small></span>
-            <a class="placement-url" href="{{ placement.url_override|default:placement.client.domain }}" target="_blank" rel="noopener">{{ placement.url_override|default:placement.client.domain }}</a>
-            <label class="placement-state"><span class="switch"><input type="checkbox" {% if placement.enabled %}checked{% endif %} data-toggle-url="{% url 'placement-toggle' placement.pk %}"><span></span></span><em>{% if placement.enabled %}Включён{% else %}Выключен{% endif %}</em></label>
-            <a class="icon-link" href="{% url 'placement-edit' placement.pk %}">Настроить</a>
-            <button class="remove" type="button" data-remove-url="{% url 'placement-remove' placement.pk %}" title="Убрать с донора">×</button>
-          </li>
-          {% empty %}<li class="empty-line">На этом доноре пока нет клиентов.</li>{% endfor %}
-        </ul>
-        <div class="donor-detail-footer">
-          <form method="post" action="{% url 'placement-add' donor.pk %}" class="add-placement">{% csrf_token %}<select name="client_id" required><option value="">Добавить существующего клиента…</option>{% for client in clients %}{% if client.enabled %}<option value="{{ client.pk }}">{{ client.name }} — {{ client.domain }}</option>{% endif %}{% endfor %}</select><button class="btn small">Добавить</button><a href="{% url 'client-create' %}">создать нового</a></form>
-          <div class="card-actions"><a class="btn small" href="{% url 'donor-edit' donor.pk %}">Настройки</a><a class="btn small" href="{% url 'donor-preview' donor.pk %}">Предпросмотр</a><form method="post" action="{% url 'donor-sync' donor.pk %}">{% csrf_token %}<button class="btn small primary">Синхронизировать</button></form></div>
-        </div>
-      </div>
-    </article>
-    {% empty %}<div class="empty dashboard-empty"><h2>Доноров не найдено</h2><p>Измените поиск или добавьте новый Joomla-сайт.</p><a class="btn primary" href="{% url 'donor-create' %}">+ Донор</a></div>{% endfor %}
-    <div class="dashboard-no-results" data-dashboard-no-results hidden>По заданным условиям ничего не найдено.</div>
-  </div>
-</div>
+    <div class="donor-sheet__details" id="donor-detail-{{ donor.pk }}" data-donor-detail hidden>
+      <div class="donor-detail-meta"><span><b>Страница:</b> <a href="{{ donor.page_url }}" target="_blank" rel="noopener">{{ donor.page_url }}</a></span><span><b>Материал:</b> {% if donor.article_id %}#{{ donor.article_id }}{% else %}—{% endif %}</span><span><b>Меню:</b> {% if donor.menu_item_id %}#{{ donor.menu_item_id }}{% else %}—{% endif %}</span><span><b>Проверка:</b> {% if donor.last_checked_at %}{{ donor.last_checked_at|date:'d.m.Y H:i' }}{% else %}—{% endif %}</span></div>
+      <div class="placement-detail-head"><span></span><span>Слот</span><span>Клиент</span><span>URL</span><span>Статус</span><span></span><span></span></div>
+      <ul class="placement-list placement-detail-list" data-reorder-url="{% url 'placements-reorder' %}">
+        {% for placement in donor.placements.all %}<li draggable="true" data-placement-id="{{ placement.pk }}" class="placement {% if not placement.enabled %}is-disabled{% endif %}"><span class="drag" title="Перетащить">⠿</span><span class="placement-slot">{{ forloop.counter }}</span><span class="placement-name">{{ placement.client.name }}{% if placement.html_override %} <span class="badge warning" title="Задан индивидуальный HTML">override</span>{% endif %}<small>{{ placement.client.domain }}</small></span><a class="placement-url" href="{{ placement.url_override|default:placement.client.domain }}" target="_blank" rel="noopener">{{ placement.url_override|default:placement.client.domain }}</a><label class="placement-state"><span class="switch"><input type="checkbox" {% if placement.enabled %}checked{% endif %} data-toggle-url="{% url 'placement-toggle' placement.pk %}"><span></span></span><em>{% if placement.enabled %}Включён{% else %}Выключен{% endif %}</em></label><a class="icon-link" href="{% url 'placement-edit' placement.pk %}">Настроить</a><button class="remove" type="button" data-remove-url="{% url 'placement-remove' placement.pk %}" title="Убрать с донора">×</button></li>{% empty %}<li class="empty-line">На этом доноре пока нет клиентов.</li>{% endfor %}
+      </ul>
+      <div class="donor-detail-footer"><form method="post" action="{% url 'placement-add' donor.pk %}" class="add-placement">{% csrf_token %}<select name="client_id" required><option value="">Добавить существующего клиента…</option>{% for client in clients %}{% if client.enabled %}<option value="{{ client.pk }}">{{ client.name }} — {{ client.domain }}</option>{% endif %}{% endfor %}</select><button class="btn small">Добавить</button><a href="{% url 'client-create' %}">создать нового</a></form><div class="card-actions"><a class="btn small" href="{% url 'donor-edit' donor.pk %}">Настройки</a><a class="btn small" href="{% url 'donor-preview' donor.pk %}">Предпросмотр</a><form method="post" action="{% url 'donor-sync' donor.pk %}">{% csrf_token %}<button class="btn small primary">Синхронизировать</button></form></div></div>
+    </div>
+  </article>
+  {% empty %}<div class="empty dashboard-empty"><h2>Доноров не найдено</h2><p>Измените поиск или добавьте новый Joomla-сайт.</p><a class="btn primary" href="{% url 'donor-create' %}">+ Донор</a></div>{% endfor %}
+  <div class="dashboard-no-results" data-dashboard-no-results hidden>По заданным условиям ничего не найдено.</div>
+</div></div>
 {% endif %}
 {% endblock %}
