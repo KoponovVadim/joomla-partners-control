@@ -1,3 +1,5 @@
-from .base import JoomlaAdapter
-class Joomla4Adapter(JoomlaAdapter): version = "4"
+from .api import JoomlaApiAdapter
 
+
+class Joomla4Adapter(JoomlaApiAdapter):
+    version = "4"
