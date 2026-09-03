@@ -34,6 +34,7 @@ class DonorSite(TimeStampedModel):
 
     class AuthMode(models.TextChoices):
         PASSWORD = "password", "Логин и пароль (Joomla 3)"
+        CONNECTOR_TOKEN = "connector_token", "JPC Connector (Joomla 3)"
         API_TOKEN = "api_token", "API Token (Joomla 4/5)"
 
     class ConnectionStatus(models.TextChoices):
@@ -70,6 +71,16 @@ class DonorSite(TimeStampedModel):
         ),
     )
     encrypted_api_token = models.TextField(blank=True, editable=False)
+    connector_url = models.URLField(
+        "JPC Connector URL",
+        max_length=500,
+        blank=True,
+        help_text=(
+            "Необязательно. По умолчанию endpoint вычисляется из Admin URL "
+            "и работает через публичный index.php."
+        ),
+    )
+    encrypted_connector_token = models.TextField(blank=True, editable=False)
     article_id = models.PositiveIntegerField("ID материала", null=True, blank=True)
     article_title = models.CharField("Заголовок материала", max_length=255, default="Наши партнёры")
     article_category_id = models.PositiveIntegerField("ID категории материала", default=2)
@@ -109,6 +120,10 @@ class DonorSite(TimeStampedModel):
     @property
     def api_token_is_set(self):
         return bool(self.encrypted_api_token)
+
+    @property
+    def connector_token_is_set(self):
+        return bool(self.encrypted_connector_token)
 
 
 class ClientSite(TimeStampedModel):
