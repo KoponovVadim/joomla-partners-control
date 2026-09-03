@@ -42,12 +42,13 @@
   <div class="actions dashboard-actions-main"><a class="btn" href="?mode=clients">Клиенты</a><a class="btn" href="{% url 'template-list' %}">Шаблоны</a><a class="btn" href="{% url 'client-create' %}">+ Клиент</a><a class="btn primary" href="{% url 'donor-create' %}">+ Донор</a></div>
 </section>
 <div class="donor-sheet-scroll"><div class="donor-sheet" data-donor-sheet>
-  <div class="donor-sheet__header donor-sheet__grid" aria-hidden="true"><span></span><strong>Донор</strong><strong>Клиенты</strong><strong>Статус страницы</strong><strong>Паразит 1</strong><strong>Паразит 2</strong><strong>Паразит 3</strong><strong>Паразит 4</strong><strong>Паразит 5</strong><strong></strong></div>
+  <div class="donor-sheet__header donor-sheet__grid" aria-hidden="true"><span></span><strong>Донор</strong><strong>Тематика</strong><strong>Клиенты</strong><strong>Статус страницы</strong><strong>Паразит 1</strong><strong>Паразит 2</strong><strong>Паразит 3</strong><strong>Паразит 4</strong><strong>Паразит 5</strong><strong></strong></div>
   {% for donor in donors %}
   <article class="donor-sheet__item {% if not donor.enabled %}is-disabled{% endif %}" data-donor-item data-donor-id="{{ donor.pk }}" data-donor-search="{{ donor.domain|lower }} {{ donor.name|lower }} {{ donor.topic|lower }}" data-donor-topic="{{ donor.topic|lower }}" data-donor-topic-label="{{ donor.topic }}" data-donor-status="{{ donor.page_health_state }}">
     <div class="donor-sheet__row donor-sheet__grid">
       <button class="donor-expand" type="button" data-donor-toggle aria-expanded="false" aria-controls="donor-detail-{{ donor.pk }}" title="Развернуть">›</button>
-      <div class="donor-main-cell"><a class="donor-domain" href="{{ donor.page_url }}" target="_blank" rel="noopener">{{ donor.domain }} <span aria-hidden="true">↗</span></a>{% if donor.topic %}<small class="donor-topic">{{ donor.topic }}</small>{% endif %}<small>Joomla {{ donor.joomla_version }}{% if donor.article_id %} · материал #{{ donor.article_id }}{% endif %}</small></div>
+      <div class="donor-main-cell"><a class="donor-domain" href="{{ donor.page_url }}" target="_blank" rel="noopener">{{ donor.domain }} <span aria-hidden="true">↗</span></a><small>Joomla {{ donor.joomla_version }}{% if donor.article_id %} · материал #{{ donor.article_id }}{% endif %}</small></div>
+      <div class="donor-topic-cell">{% if donor.topic %}<span>{{ donor.topic }}</span>{% else %}<span class="muted">—</span>{% endif %}</div>
       <div class="donor-count">{{ donor.placements.all|length }}</div>
       <div class="page-health-cell">
         {% if not donor.enabled %}
@@ -63,8 +64,8 @@
         {% endif %}
         {% if donor.page_checked_at %}<small>проверено {{ donor.page_checked_at|date:'d.m H:i' }}</small>{% endif %}
       </div>
-      {% for placement in donor.placements.all|slice:':5' %}<div class="parasite-cell {% if not placement.enabled %}is-disabled{% endif %}" style="grid-column:{{ forloop.counter|add:4 }}" data-placement-summary-id="{{ placement.pk }}" data-client-key="{{ placement.client.domain|lower }}"><a href="{{ placement.url_override|default:placement.client.domain }}" target="_blank" rel="noopener">{{ placement.client.name }}</a><small>{{ placement.url_override|default:placement.client.domain }}</small></div>{% endfor %}
-      <details class="row-menu" style="grid-column:10"><summary title="Действия">⋮</summary><div class="row-menu__panel"><a href="{% url 'donor-edit' donor.pk %}">Настройки</a><a href="{% url 'donor-preview' donor.pk %}">Предпросмотр</a><form method="post" action="{% url 'donor-sync' donor.pk %}">{% csrf_token %}<button>Синхронизировать</button></form></div></details>
+      {% for placement in donor.placements.all|slice:':5' %}<div class="parasite-cell {% if not placement.enabled %}is-disabled{% endif %}" style="grid-column:{{ forloop.counter|add:5 }}" data-placement-summary-id="{{ placement.pk }}" data-client-key="{{ placement.client.domain|lower }}"><a href="{{ placement.url_override|default:placement.client.domain }}" target="_blank" rel="noopener">{{ placement.client.name }}</a><small>{{ placement.url_override|default:placement.client.domain }}</small></div>{% endfor %}
+      <details class="row-menu" style="grid-column:11"><summary title="Действия">⋮</summary><div class="row-menu__panel"><a href="{% url 'donor-edit' donor.pk %}">Настройки</a><a href="{% url 'donor-preview' donor.pk %}">Предпросмотр</a><form method="post" action="{% url 'donor-sync' donor.pk %}">{% csrf_token %}<button>Синхронизировать</button></form></div></details>
     </div>
     <div class="donor-sheet__details" id="donor-detail-{{ donor.pk }}" data-donor-detail hidden>
       <div class="donor-detail-meta">{% if donor.topic %}<span><b>Тематика:</b> {{ donor.topic }}</span>{% endif %}<span><b>Страница:</b> <a href="{{ donor.page_url }}" target="_blank" rel="noopener">{{ donor.page_url }}</a></span><span><b>Материал:</b> {% if donor.article_id %}#{{ donor.article_id }}{% else %}—{% endif %}</span><span><b>Меню:</b> {% if donor.menu_item_id %}#{{ donor.menu_item_id }}{% else %}—{% endif %}</span><span><b>HTTP:</b> {% if donor.page_http_status %}{{ donor.page_http_status }}{% else %}—{% endif %}</span></div>
