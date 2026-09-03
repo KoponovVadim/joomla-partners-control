@@ -330,3 +330,48 @@ class PublicMediaTests(TestCase):
             with override_settings(MEDIA_ROOT=media_root, DEBUG=False):
                 response = self.client.get("/media/secret.txt")
                 self.assertEqual(response.status_code, 404)
+
+    def test_non_image_inside_logo_directory_is_not_public(self):
+        with tempfile.TemporaryDirectory() as directory:
+            media_root = Path(directory)
+            logo_dir = media_root / "client_logos"
+            logo_dir.mkdir()
+            (logo_dir / "secret.txt").write_text("not an image", encoding="utf-8")
+            with override_settings(MEDIA_ROOT=media_root, DEBUG=False):
+                response = self.client.get("/media/client_logos/secret.txt")
+                self.assertEqual(response.status_code, 404)
+
+    def test_logo_path_cannot_traverse_to_other_media(self):
+        with tempfile.TemporaryDirectory() as directory:
+            media_root = Path(directory)
+            (media_root / "client_logos").mkdir()
+            (media_root / "secret.webp").write_bytes(b"private")
+            with override_settings(MEDIA_ROOT=media_root, DEBUG=False):
+                response = self.client.get(
+                    "/media/client_logos/../secret.webp",
+                )
+                self.assertEqual(response.status_code, 404)
+
+
+class ProductionSecurityTests(TestCase):
+    @override_settings(
+        SECURE_SSL_REDIRECT=True,
+        SECURE_HSTS_SECONDS=31536000,
+        SESSION_COOKIE_SECURE=True,
+        CSRF_COOKIE_SECURE=True,
+    )
+    def test_proxy_https_is_trusted_and_security_headers_are_set(self):
+        response = self.client.get(
+            reverse("login"),
+            HTTP_X_FORWARDED_PROTO="https",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Strict-Transport-Security"],
+            "max-age=31536000",
+        )
+        self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response["Referrer-Policy"], "same-origin")
+        self.assertEqual(response["X-Frame-Options"], "DENY")
+        self.assertTrue(response.cookies["csrftoken"]["secure"])
