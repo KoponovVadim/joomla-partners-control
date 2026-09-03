@@ -32,6 +32,10 @@ class DonorSite(TimeStampedModel):
         V4 = "4", "Joomla 4"
         V5 = "5", "Joomla 5"
 
+    class AuthMode(models.TextChoices):
+        PASSWORD = "password", "Логин и пароль (Joomla 3)"
+        API_TOKEN = "api_token", "API Token (Joomla 4/5)"
+
     class ConnectionStatus(models.TextChoices):
         UNKNOWN = "unknown", "Не проверено"
         ONLINE = "online", "Online"
@@ -48,8 +52,24 @@ class DonorSite(TimeStampedModel):
         choices=JoomlaVersion.choices,
         default=JoomlaVersion.UNKNOWN,
     )
+    auth_mode = models.CharField(
+        "Способ авторизации",
+        max_length=20,
+        choices=AuthMode.choices,
+        default=AuthMode.PASSWORD,
+    )
     username = models.CharField("Логин", max_length=150, blank=True)
     encrypted_password = models.TextField(blank=True, editable=False)
+    api_url = models.URLField(
+        "API URL",
+        max_length=500,
+        blank=True,
+        help_text=(
+            "Необязательно. По умолчанию JPC вычисляет /api/index.php/v1 "
+            "из Admin URL."
+        ),
+    )
+    encrypted_api_token = models.TextField(blank=True, editable=False)
     article_id = models.PositiveIntegerField("ID материала", null=True, blank=True)
     article_title = models.CharField("Заголовок материала", max_length=255, default="Наши партнёры")
     article_category_id = models.PositiveIntegerField("ID категории материала", default=2)
@@ -85,6 +105,10 @@ class DonorSite(TimeStampedModel):
     @property
     def password_is_set(self):
         return bool(self.encrypted_password)
+
+    @property
+    def api_token_is_set(self):
+        return bool(self.encrypted_api_token)
 
 
 class ClientSite(TimeStampedModel):
