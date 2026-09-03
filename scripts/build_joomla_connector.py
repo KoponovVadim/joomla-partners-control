@@ -5,7 +5,7 @@ from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "joomla_connector" / "plg_ajax_jpcconnector"
-OUTPUT = ROOT / "dist" / "plg_ajax_jpcconnector-1.0.0.zip"
+OUTPUT = ROOT / "static" / "partners" / "downloads" / "plg_ajax_jpcconnector-1.0.0.zip"
 FILES = (
     "jpcconnector.php",
     "jpcconnector.xml",
