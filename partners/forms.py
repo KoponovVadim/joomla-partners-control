@@ -19,7 +19,16 @@ class DonorForm(StyledModelForm):
         label="Пароль",
         required=False,
         widget=forms.PasswordInput(render_value=False),
-        help_text="Оставьте пустым, чтобы сохранить текущий пароль.",
+        help_text="Для Joomla 3. Оставьте пустым, чтобы сохранить текущий пароль.",
+    )
+    api_token = forms.CharField(
+        label="API Token",
+        required=False,
+        widget=forms.PasswordInput(render_value=False),
+        help_text=(
+            "Для Joomla 4/5. Токен передаётся только в X-Joomla-Token и хранится "
+            "в зашифрованном виде. Оставьте пустым, чтобы сохранить текущий."
+        ),
     )
 
     class Meta:
@@ -30,8 +39,11 @@ class DonorForm(StyledModelForm):
             "admin_url",
             "page_url",
             "joomla_version",
+            "auth_mode",
             "username",
             "password",
+            "api_url",
+            "api_token",
             "article_id",
             "article_title",
             "article_category_id",
@@ -42,6 +54,21 @@ class DonorForm(StyledModelForm):
             "notes",
         ]
         widgets = {"notes": forms.Textarea(attrs={"rows": 3})}
+
+    def clean(self):
+        cleaned = super().clean()
+        version = cleaned.get("joomla_version")
+        auth_mode = cleaned.get("auth_mode")
+
+        if version == DonorSite.JoomlaVersion.V3 and auth_mode != DonorSite.AuthMode.PASSWORD:
+            self.add_error("auth_mode", "Для Joomla 3 используется вход по логину и паролю.")
+        elif version in {DonorSite.JoomlaVersion.V4, DonorSite.JoomlaVersion.V5}:
+            if auth_mode != DonorSite.AuthMode.API_TOKEN:
+                self.add_error("auth_mode", "Для Joomla 4/5 выберите авторизацию по API Token.")
+            if not cleaned.get("api_token") and not self.instance.api_token_is_set:
+                self.add_error("api_token", "Укажите API Token пользователя Joomla.")
+
+        return cleaned
 
 
 class ClientForm(StyledModelForm):
