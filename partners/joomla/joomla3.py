@@ -81,6 +81,42 @@ class Joomla3Adapter(JoomlaAdapter):
         if error:
             raise JoomlaArticleError(f"{prefix}: " + " ".join(error.stripped_strings)[:300])
 
+    @staticmethod
+    def _find_login_form(soup):
+        form = self._find_login_form(soup)
+        if form:
+            return form
+        for candidate in soup.select("form"):
+            if (
+                candidate.select_one('[name="username"]')
+                and candidate.select_one('[name="passwd"]')
+            ):
+                return candidate
+        return None
+
+    @staticmethod
+    def _raise_login_barrier(response, soup):
+        title = " ".join(soup.title.stripped_strings) if soup.title else ""
+        page_text = " ".join(soup.stripped_strings)
+        if (
+            "1Gb.ru" in title
+            or "1Гб.ру" in page_text
+            or "защиты от подбора паролей" in page_text
+            or "/ipsec_set_cookies" in response.text
+        ):
+            raise JoomlaConnectionError(
+                "Хостинг 1Gb.ru блокирует доступ JPC к /administrator/ "
+                "защитой от подбора паролей. Разрешите исходящий IP "
+                "production-сервера JPC в настройках защиты хостинга "
+                "или отключите эту защиту для administrator."
+            )
+
+        page = f" Получена страница «{title[:120]}»." if title else ""
+        raise JoomlaAuthenticationError(
+            "Joomla не вернула ожидаемую форму входа."
+            f"{page} Конечный URL: {response.url}"
+        )
+
     def _request(self, client, method, url, **kwargs):
         try:
             response = client.request(method, url, **kwargs)
@@ -104,18 +140,18 @@ class Joomla3Adapter(JoomlaAdapter):
             raise JoomlaAuthenticationError("Не заполнены логин или пароль Joomla")
         response = self._request(client, "GET", self.admin_url)
         soup = BeautifulSoup(response.text, "html.parser")
-        form = soup.select_one("form#form-login")
+        form = self._find_login_form(soup)
         if not form:
             if soup.select_one("a[href*='task=logout'], .nav-user, #menu"):
                 return
-            raise JoomlaAuthenticationError("Joomla не вернула ожидаемую форму входа")
+            self._raise_login_barrier(response, soup)
         values = self._form_values(form)
         values = self._replace(values, "username", username)
         values = self._replace(values, "passwd", password)
         action = urljoin(str(response.url), form.get("action") or "index.php")
         response = self._post_form(client, action, values)
         result = BeautifulSoup(response.text, "html.parser")
-        if result.select_one("form#form-login"):
+        if self._find_login_form(result):
             alert = result.select_one(".alert-error, .alert-danger, #system-message-container")
             detail = " ".join(alert.stripped_strings) if alert else "неверный логин, пароль или недостаточно прав"
             raise JoomlaAuthenticationError(f"Вход в Joomla не выполнен: {detail[:300]}")
@@ -127,7 +163,7 @@ class Joomla3Adapter(JoomlaAdapter):
         )
         response = self._request(client, "GET", url)
         soup = BeautifulSoup(response.text, "html.parser")
-        if soup.select_one("form#form-login"):
+        if self._find_login_form(soup):
             raise JoomlaAuthenticationError("Сессия Joomla завершилась")
         form = soup.select_one("form#item-form")
         if not form:
@@ -151,7 +187,7 @@ class Joomla3Adapter(JoomlaAdapter):
         url = urljoin(self.admin_url, "index.php?option=com_content&view=articles")
         response = self._request(client, "GET", url)
         soup = BeautifulSoup(response.text, "html.parser")
-        if soup.select_one("form#form-login"):
+        if self._find_login_form(soup):
             raise JoomlaAuthenticationError("Сессия Joomla завершилась")
         form = soup.select_one("form#adminForm")
         if not form:
@@ -171,7 +207,7 @@ class Joomla3Adapter(JoomlaAdapter):
         )
         checked = self._post_form(client, action, values)
         result = BeautifulSoup(checked.text, "html.parser")
-        if result.select_one("form#form-login"):
+        if self._find_login_form(result):
             raise JoomlaAuthenticationError("Сессия Joomla завершилась во время Check-in")
         error = result.select_one(".alert-error, .alert-danger")
         if error:
@@ -197,7 +233,7 @@ class Joomla3Adapter(JoomlaAdapter):
         url = urljoin(self.admin_url, "index.php?option=com_content&task=article.add")
         response = self._request(client, "GET", url)
         soup = BeautifulSoup(response.text, "html.parser")
-        if soup.select_one("form#form-login"):
+        if self._find_login_form(soup):
             raise JoomlaAuthenticationError("Сессия Joomla завершилась")
         form = soup.select_one("form#item-form")
         if not form:
