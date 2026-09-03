@@ -63,6 +63,34 @@ class Migration(migrations.Migration):
                 verbose_name="HTML описания",
             ),
         ),
+        migrations.AlterField(
+            model_name="clientsite",
+            name="description",
+            field=models.TextField(
+                blank=True,
+                help_text="Legacy fallback. Новые описания редактируются через HTML-варианты.",
+                verbose_name="Текстовое описание",
+            ),
+        ),
+        migrations.AlterField(
+            model_name="clientsite",
+            name="link_text",
+            field=models.CharField(
+                blank=True,
+                help_text="Legacy fallback.",
+                max_length=255,
+                verbose_name="Текст ссылки",
+            ),
+        ),
+        migrations.AlterField(
+            model_name="clientsite",
+            name="default_html",
+            field=models.TextField(
+                blank=True,
+                help_text="Legacy fallback. Новые HTML описания хранятся в вариантах.",
+                verbose_name="Расширенный HTML",
+            ),
+        ),
         migrations.AddField(
             model_name="donorsite",
             name="page_http_status",
