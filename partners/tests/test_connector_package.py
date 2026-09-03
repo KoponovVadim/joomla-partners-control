@@ -31,11 +31,22 @@ class JoomlaConnectorPackageTests(SimpleTestCase):
         self.assertEqual(root.attrib["type"], "plugin")
         self.assertEqual(root.attrib["group"], "ajax")
         self.assertEqual(root.attrib["version"], "3.10")
-        self.assertEqual(root.findtext("version"), "1.0.0")
+        self.assertEqual(root.findtext("version"), "1.0.1")
         self.assertEqual(
             root.find("./files/filename[@plugin='jpcconnector']").text,
             "jpcconnector.php",
         )
+
+    def test_update_recovers_only_after_primary_body_was_persisted(self):
+        source = (SOURCE / "jpcconnector.php").read_text(encoding="utf-8")
+
+        self.assertIn("private function storedBodyMatches", source)
+        self.assertIn(
+            "->select($db->quoteName(array('introtext', 'fulltext')))",
+            source,
+        )
+        self.assertIn("if (!$this->storedBodyMatches(", source)
+        self.assertIn("const CONNECTOR_VERSION = '1.0.1';", source)
 
     def test_installable_zip_contains_current_sources(self):
         self.assertTrue(PACKAGE.is_file(), "Connector ZIP must be committed")
