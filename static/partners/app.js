@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const htmlEditor = document.querySelector('[name=default_html]');
-  const descriptionEditor = document.querySelector('[name=description]');
+  const legacyDescriptionEditor = document.querySelector('[name=description]');
   const linkTextInput = document.querySelector('[name=link_text]');
   const clientNameInput = document.querySelector('[name=name]');
   const domainInput = document.querySelector('[name=domain]');
@@ -63,20 +63,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const escapeHtml = value => String(value || '').replace(/[&<>"']/g, char => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
     })[char]);
+    const activeDescription = () => {
+      const rows = [...document.querySelectorAll('[data-description-row]:not(.is-deleted)')];
+      const activeRow = rows.find(row => {
+        const enabled = row.querySelector('input[name$="-enabled"]');
+        const text = row.querySelector('textarea[name$="-text"]');
+        return (!enabled || enabled.checked) && text?.value.trim();
+      });
+      return activeRow?.querySelector('textarea[name$="-text"]')?.value || legacyDescriptionEditor?.value || '';
+    };
     const update = () => {
       if (htmlEditor.value.trim()) {
         liveFrame.srcdoc = htmlEditor.value;
         return;
       }
-      const description = escapeHtml(descriptionEditor?.value).replace(/\r?\n/g, '<br>');
+      const description = escapeHtml(activeDescription()).replace(/\r?\n/g, '<br>');
       const linkText = escapeHtml(linkTextInput?.value.trim() || clientNameInput?.value.trim() || 'Перейти на сайт');
       const rawUrl = domainInput?.value.trim() || '#';
       const url = /^(https?:)?\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl.replace(/^\/+|\/+$/g, '')}`;
       liveFrame.srcdoc = `${description}${description ? ' ' : ''}<a href="${escapeHtml(url)}">${linkText}</a>`;
     };
-    [htmlEditor, descriptionEditor, linkTextInput, clientNameInput, domainInput]
+    [htmlEditor, legacyDescriptionEditor, linkTextInput, clientNameInput, domainInput]
       .filter(Boolean)
       .forEach(field => field.addEventListener('input', update));
+    document.querySelectorAll('[data-description-row] textarea[name$="-text"], [data-description-row] input[name$="-enabled"]')
+      .forEach(field => field.addEventListener('input', update));
+    document.addEventListener('jpc:variants-changed', update);
     update();
   }
   const previewSource = document.querySelector('#preview-source');
