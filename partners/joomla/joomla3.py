@@ -83,7 +83,7 @@ class Joomla3Adapter(JoomlaAdapter):
 
     @staticmethod
     def _find_login_form(soup):
-        form = self._find_login_form(soup)
+        form = soup.select_one("form#form-login")
         if form:
             return form
         for candidate in soup.select("form"):
