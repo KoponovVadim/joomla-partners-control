@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -15,6 +16,7 @@ from partners.models import (
     Placement,
     PublicationLog,
 )
+from partners.services.credentials import decrypt_secret
 
 
 class PlacementViewTests(TestCase):
@@ -136,6 +138,59 @@ class TemplateViewTests(TestCase):
         self.assertTrue(self.second.include_css_in_article)
 
 
+class DonorAuthViewTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            "api-operator",
+            password="test",
+        )
+        self.client.force_login(self.user)
+        self.env = patch.dict(
+            os.environ,
+            {"CREDENTIAL_ENCRYPTION_KEY": "view-api-token-tests"},
+        )
+        self.env.start()
+        self.addCleanup(self.env.stop)
+
+    def test_create_joomla5_donor_encrypts_api_token(self):
+        response = self.client.post(
+            reverse("donor-create"),
+            {
+                "name": "Joomla 5 donor",
+                "domain": "j5.test",
+                "admin_url": "https://j5.test/administrator/",
+                "page_url": "https://j5.test/partners",
+                "joomla_version": DonorSite.JoomlaVersion.V5,
+                "auth_mode": DonorSite.AuthMode.API_TOKEN,
+                "username": "",
+                "password": "",
+                "api_url": "",
+                "api_token": "plain-api-token",
+                "article_id": "",
+                "article_title": "Partners",
+                "article_category_id": "2",
+                "menu_item_id": "",
+                "article_alias": "partners",
+                "template": "",
+                "enabled": "on",
+                "notes": "",
+            },
+        )
+
+        self.assertRedirects(response, reverse("dashboard"))
+        donor = DonorSite.objects.get(domain="j5.test")
+        self.assertNotIn("plain-api-token", donor.encrypted_api_token)
+        self.assertEqual(
+            decrypt_secret(donor.encrypted_api_token),
+            "plain-api-token",
+        )
+
+        edit = self.client.get(reverse("donor-edit", args=[donor.pk]))
+        self.assertNotContains(edit, "plain-api-token")
+        self.assertNotContains(edit, donor.encrypted_api_token)
+        self.assertContains(edit, "API Token сохранён в зашифрованном виде")
+
+
 class SnapshotViewTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user("snapshot-operator", password="test")
@@ -189,6 +244,27 @@ class SnapshotViewTests(TestCase):
         self.assertEqual(log.status, "success")
         self.assertEqual(log.generated_html_hash, self.snapshot.body_hash)
         self.assertIn(f"Snapshot #{self.snapshot.pk} восстановлен", log.message)
+
+    def test_joomla5_managed_snapshot_can_be_restored(self):
+        self.donor.joomla_version = DonorSite.JoomlaVersion.V5
+        self.donor.save(update_fields=["joomla_version"])
+        adapter = Mock()
+        adapter.update_article.return_value = "Joomla 5 API restored"
+
+        with patch("partners.views.get_adapter", return_value=adapter):
+            response = self.client.post(
+                reverse(
+                    "donor-restore-snapshot",
+                    args=[self.donor.pk, self.snapshot.pk],
+                )
+            )
+
+        self.assertRedirects(response, reverse("donor-edit", args=[self.donor.pk]))
+        adapter.update_article.assert_called_once_with(87, self.snapshot.body_html)
+        self.assertEqual(
+            PublicationLog.objects.get(action="restore_snapshot").status,
+            "success",
+        )
 
     def test_before_adoption_snapshot_is_preview_only(self):
         original = ArticleSnapshot.objects.create(
