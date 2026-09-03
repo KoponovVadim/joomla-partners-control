@@ -5,7 +5,12 @@ from django.test import TestCase, override_settings
 
 from partners.forms import DonorForm
 from partners.models import ClientSite, DonorSite, PageTemplate, Placement
-from partners.services.credentials import decrypt_password, encrypt_password
+from partners.services.credentials import (
+    decrypt_password,
+    decrypt_secret,
+    encrypt_password,
+    encrypt_secret,
+)
 from partners.services.page_renderer import has_managed_marker, render_page
 
 
@@ -180,3 +185,53 @@ class CredentialTests(TestCase):
         html = DonorForm(instance=donor).as_p()
         self.assertNotIn("super-secret", html)
         self.assertNotIn(encrypted, html)
+
+    def test_api_token_round_trip_and_form_never_contains_existing_secret(self):
+        os.environ["CREDENTIAL_ENCRYPTION_KEY"] = "unit-test-key"
+        encrypted = encrypt_secret("joomla-token-secret")
+        self.assertNotIn("joomla-token-secret", encrypted)
+        self.assertEqual(decrypt_secret(encrypted), "joomla-token-secret")
+
+        donor = DonorSite(
+            name="D",
+            domain="d.test",
+            admin_url="https://d.test/administrator/",
+            page_url="https://d.test/p",
+            joomla_version=DonorSite.JoomlaVersion.V5,
+            auth_mode=DonorSite.AuthMode.API_TOKEN,
+            encrypted_api_token=encrypted,
+        )
+        html = DonorForm(instance=donor).as_p()
+        self.assertNotIn("joomla-token-secret", html)
+        self.assertNotIn(encrypted, html)
+
+    def test_joomla45_form_requires_api_token_but_preserves_existing_one(self):
+        os.environ["CREDENTIAL_ENCRYPTION_KEY"] = "unit-test-key"
+        data = {
+            "name": "D",
+            "domain": "d.test",
+            "admin_url": "https://d.test/administrator/",
+            "page_url": "https://d.test/p",
+            "joomla_version": DonorSite.JoomlaVersion.V5,
+            "auth_mode": DonorSite.AuthMode.API_TOKEN,
+            "username": "",
+            "password": "",
+            "api_url": "",
+            "api_token": "",
+            "article_id": "",
+            "article_title": "Partners",
+            "article_category_id": "2",
+            "menu_item_id": "",
+            "article_alias": "partners",
+            "template": "",
+            "enabled": "on",
+            "notes": "",
+        }
+
+        missing = DonorForm(data=data)
+        self.assertFalse(missing.is_valid())
+        self.assertIn("api_token", missing.errors)
+
+        donor = DonorSite(encrypted_api_token=encrypt_secret("existing-token"))
+        existing = DonorForm(data=data, instance=donor)
+        self.assertTrue(existing.is_valid(), existing.errors.as_text())
