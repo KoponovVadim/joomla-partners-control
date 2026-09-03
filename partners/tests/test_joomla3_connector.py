@@ -48,7 +48,7 @@ class MockConnectorAdapter(Joomla3ConnectorAdapter):
                     "joomla_version": "3.10.12",
                 }
             elif action == "get":
-                data = self._article()
+                data = self._state_article()
             elif action == "create":
                 self.state["creates"] += 1
                 self.state["id"] = self.state.get("new_id", 91)
@@ -61,7 +61,7 @@ class MockConnectorAdapter(Joomla3ConnectorAdapter):
                 self.state["html"] = payload["html"]
                 if self.state.get("drop_marker_after_create"):
                     self.state["html"] = "<p>marker filtered</p>"
-                data = self._article()
+                data = self._state_article()
             elif action in {"adopt", "update"}:
                 expected = sha256(
                     self.state["html"].encode()
@@ -77,7 +77,7 @@ class MockConnectorAdapter(Joomla3ConnectorAdapter):
                     )
                 self.state["updates"] += 1
                 self.state["html"] = payload["html"]
-                data = self._article()
+                data = self._state_article()
             else:
                 return httpx.Response(400, request=request)
 
@@ -89,7 +89,7 @@ class MockConnectorAdapter(Joomla3ConnectorAdapter):
 
         return httpx.MockTransport(handler)
 
-    def _article(self):
+    def _state_article(self):
         return {
             "id": self.state["id"],
             "title": self.state["title"],
