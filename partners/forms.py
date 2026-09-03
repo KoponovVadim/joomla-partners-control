@@ -62,10 +62,27 @@ class ClientForm(StyledModelForm):
 
     class Meta:
         model = ClientSite
-        fields = ["name", "domain", "logo", "default_html", "notes", "enabled"]
+        fields = [
+            "name",
+            "domain",
+            "logo",
+            "description",
+            "link_text",
+            "default_html",
+            "notes",
+            "enabled",
+        ]
         widgets = {
-            "default_html": forms.Textarea(attrs={"rows": 14, "class": "input code-editor"}),
+            "description": forms.Textarea(attrs={"rows": 6}),
+            "default_html": forms.Textarea(attrs={"rows": 8, "class": "input code-editor"}),
             "notes": forms.Textarea(attrs={"rows": 3}),
+        }
+        help_texts = {
+            "default_html": (
+                "Расширенный режим для старой или сложной разметки. Если поле заполнено, оно имеет "
+                "приоритет над текстовым описанием; JPC оставит в нём одну текстовую ссылку и приведёт "
+                "её URL и атрибуты к настройкам клиента."
+            )
         }
 
     def clean_logo(self):
@@ -99,6 +116,8 @@ class PlacementForm(StyledModelForm):
     class Meta:
         model = Placement
         fields = [
+            "description_override",
+            "link_text_override",
             "html_override",
             "url_override",
             "image_override",
@@ -107,10 +126,23 @@ class PlacementForm(StyledModelForm):
             "sponsored",
             "enabled",
         ]
-        widgets = {"html_override": forms.Textarea(attrs={"rows": 12, "class": "input code-editor"})}
+        widgets = {
+            "description_override": forms.Textarea(attrs={"rows": 5}),
+            "html_override": forms.Textarea(attrs={"rows": 8, "class": "input code-editor"}),
+        }
         help_texts = {
+            "description_override": (
+                "Оставьте пустым, чтобы использовать текстовое описание из карточки клиента."
+            ),
+            "link_text_override": (
+                "Оставьте пустым, чтобы использовать текст ссылки из карточки клиента."
+            ),
+            "html_override": (
+                "Расширенный режим только для этого донора. Имеет приоритет над обычным описанием; "
+                "JPC нормализует ссылки до одной текстовой."
+            ),
             "image_override": (
                 "Оставьте пустым, чтобы автоматически использовать картинку, загруженную в карточке клиента. "
                 "Заполняйте только если для этого размещения нужен другой URL картинки."
-            )
+            ),
         }
