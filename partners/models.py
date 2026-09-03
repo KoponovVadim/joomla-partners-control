@@ -91,7 +91,22 @@ class ClientSite(TimeStampedModel):
     name = models.CharField("Название", max_length=200)
     domain = models.CharField("Домен / URL", max_length=500, unique=True)
     logo = models.ImageField("Логотип", upload_to="client_logos/", blank=True)
-    default_html = models.TextField("HTML", blank=True)
+    description = models.TextField(
+        "Текстовое описание",
+        blank=True,
+        help_text="Обычный текст без HTML. Переносы строк сохраняются.",
+    )
+    link_text = models.CharField(
+        "Текст ссылки",
+        max_length=255,
+        blank=True,
+        help_text="Например: «Перейти на сайт». Если не заполнено, используется название клиента.",
+    )
+    default_html = models.TextField(
+        "Расширенный HTML",
+        blank=True,
+        help_text="Необязательный режим для существующей сложной разметки.",
+    )
     enabled = models.BooleanField("Активен", default=True)
     notes = models.TextField("Заметки", blank=True)
 
@@ -110,7 +125,13 @@ class Placement(TimeStampedModel):
     client = models.ForeignKey(ClientSite, related_name="placements", on_delete=models.PROTECT)
     position = models.PositiveIntegerField(default=0)
     enabled = models.BooleanField(default=True)
-    html_override = models.TextField(blank=True)
+    description_override = models.TextField("Описание для этого донора", blank=True)
+    link_text_override = models.CharField(
+        "Текст ссылки для этого донора",
+        max_length=255,
+        blank=True,
+    )
+    html_override = models.TextField("Расширенный HTML для этого донора", blank=True)
     url_override = models.URLField(max_length=500, blank=True)
     image_override = models.URLField(max_length=500, blank=True)
     target_blank = models.BooleanField(default=False)
