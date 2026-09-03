@@ -29,6 +29,7 @@
     </div>
     {% if kind == 'donor' and object and object.password_is_set %}<p class="saved-note">✓ Пароль сохранён в зашифрованном виде</p>{% endif %}
     {% if kind == 'donor' and object and object.api_token_is_set %}<p class="saved-note">✓ API Token сохранён в зашифрованном виде</p>{% endif %}
+    {% if kind == 'donor' and object and object.connector_token_is_set %}<p class="saved-note">✓ JPC Connector Token сохранён в зашифрованном виде</p>{% endif %}
     {% if kind == 'donor' and object and not object.article_id %}<p class="muted small-text">ID материала не указан: при первой синхронизации Joomla попробует создать новый материал с заданными заголовком, alias и категорией.</p>{% endif %}
     <div class="form-actions"><button class="btn primary">Сохранить</button><a class="btn" href="{% if kind == 'template' %}{% url 'template-list' %}{% else %}{% url 'dashboard' %}{% endif %}">Отмена</a></div>
   </form>
