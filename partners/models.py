@@ -133,7 +133,9 @@ class ClientSite(TimeStampedModel):
     description = models.TextField(
         "Текстовое описание",
         blank=True,
-        help_text="Обычный текст без HTML. Переносы строк сохраняются.",
+        help_text=(
+            "Legacy fallback. Новые описания редактируются через варианты описания."
+        ),
     )
     link_text = models.CharField(
         "Текст ссылки",
@@ -159,11 +161,46 @@ class ClientSite(TimeStampedModel):
         return reverse("client-edit", args=[self.pk])
 
 
+class ClientDescriptionVariant(TimeStampedModel):
+    client = models.ForeignKey(
+        ClientSite,
+        related_name="description_variants",
+        on_delete=models.CASCADE,
+    )
+    name = models.CharField(
+        "Название варианта",
+        max_length=80,
+        blank=True,
+        help_text="Например: Основное, Короткое, Нейтральное.",
+    )
+    text = models.TextField(
+        "Описание",
+        help_text="Обычный текст без HTML. Переносы строк сохраняются.",
+    )
+    position = models.PositiveIntegerField(default=0)
+    enabled = models.BooleanField("Использовать", default=True)
+
+    class Meta:
+        ordering = ["position", "id"]
+
+    def __str__(self):
+        return self.name or f"Вариант {self.pk or 'новый'}"
+
+
 class Placement(TimeStampedModel):
     donor = models.ForeignKey(DonorSite, related_name="placements", on_delete=models.CASCADE)
     client = models.ForeignKey(ClientSite, related_name="placements", on_delete=models.PROTECT)
     position = models.PositiveIntegerField(default=0)
     enabled = models.BooleanField(default=True)
+    description_variant = models.ForeignKey(
+        ClientDescriptionVariant,
+        verbose_name="Вариант описания",
+        related_name="placements",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        help_text="Пусто — JPC стабильно распределяет варианты по донорам автоматически.",
+    )
     description_override = models.TextField("Описание для этого донора", blank=True)
     link_text_override = models.CharField(
         "Текст ссылки для этого донора",
