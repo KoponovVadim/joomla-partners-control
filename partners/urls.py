@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import client_views, views
 
 
 urlpatterns = [
@@ -22,8 +22,8 @@ urlpatterns = [
     path("placements/<int:pk>/toggle/", views.placement_toggle, name="placement-toggle"),
     path("placements/<int:pk>/remove/", views.placement_remove, name="placement-remove"),
     path("placements/reorder/", views.placements_reorder, name="placements-reorder"),
-    path("clients/new/", views.client_edit, name="client-create"),
-    path("clients/<int:pk>/edit/", views.client_edit, name="client-edit"),
+    path("clients/new/", client_views.client_edit, name="client-create"),
+    path("clients/<int:pk>/edit/", client_views.client_edit, name="client-edit"),
     path("clients/<int:pk>/archive/", views.client_archive, name="client-archive"),
     path("templates/", views.template_list, name="template-list"),
     path("templates/new/", views.template_edit, name="template-create"),
