@@ -6,8 +6,8 @@
 
 - `partners/models.py` — DonorSite, ClientSite, Placement, PageTemplate, PublicationLog и ArticleSnapshot.
 - `partners/services/page_renderer.py` — детерминированный renderer, CSS отдельно от body, SHA-256 и защитный `JPC-MANAGED-PAGE` marker.
-- `partners/services/credentials.py` — Fernet-шифрование паролей ключом из environment.
-- `partners/joomla/` — отдельные адаптеры Joomla 3/4/5. Joomla 3 поддерживает вход в administrator, чтение, безопасное принятие существующего материала под управление, обновление и создание нового материала. Joomla 4/5 пока возвращают `not_implemented`.
+- `partners/services/credentials.py` — Fernet-шифрование паролей и API tokens ключом из environment.
+- `partners/joomla/` — отдельный HTML-адаптер Joomla 3 и общий Web Services API-адаптер Joomla 4/5. Все версии поддерживают чтение, безопасное принятие материала под управление, создание, обновление, marker verification и snapshots.
 - `partners/views.py`, Django templates и vanilla JS — защищённый интерфейс, CRUD, переключатели, drag-and-drop и отдельное управление несколькими шаблонами страниц.
 - Django admin доступен как служебный интерфейс `/admin/`.
 - `.github/workflows/tests.yml` запускает Django checks, проверку миграций, `collectstatic` и тесты на push/PR.
@@ -45,26 +45,34 @@ docker compose exec web python manage.py seed_demo
 
 Все параметры перечислены в `.env.example`. Настоящий `.env` исключён из git.
 
-- `SECRET_KEY`, `POSTGRES_PASSWORD` и `CREDENTIAL_ENCRYPTION_KEY` необходимо заменить.
+- `SECRET_KEY`, `POSTGRES_PASSWORD` и `CREDENTIAL_ENCRYPTION_KEY` необходимо заменить. Production-запуск с пустыми значениями или `change-me` блокируется.
 - Не меняйте `CREDENTIAL_ENCRYPTION_KEY` после сохранения credentials: существующие пароли перестанут расшифровываться.
 - `PUBLIC_BASE_URL` — внешний HTTPS URL самой панели, например `https://parasyte.deluxmedia.ru`. Он используется для превращения загруженных логотипов и относительных `image_override` в абсолютные URL перед публикацией на сторонние Joomla-сайты.
 - `ALLOWED_HOSTS` должен содержать внешний домен панели.
 - `CSRF_TRUSTED_ORIGINS` должен содержать внешний origin с `https://`.
 
-Пароли доноров находятся в PostgreSQL только в зашифрованном `DonorSite.encrypted_password` и не возвращаются в HTML форм или списков.
+Пароли и API tokens доноров находятся в PostgreSQL только в зашифрованных полях и не возвращаются в HTML форм или списков. Joomla API token передаётся только в заголовке `X-Joomla-Token`; redirects не следуются автоматически, а token удаляется из текстов API-ошибок.
 
 ### Reverse proxy и media
 
-`scripts/deploy.sh` сохраняет текущий `APP_PORT`, если он свободен или уже принадлежит этому Compose-проекту. При конфликте `scripts/find_free_port.py` проверяет реальный socket bind и выбирает порт из `8100–8999`, записывает его в `.env`, после чего запускает Compose. Reverse proxy направляется на напечатанный `http://127.0.0.1:<порт>`.
+`scripts/deploy.sh` сначала проверяет обязательные production-переменные и `DEBUG=0`, затем сохраняет текущий `APP_PORT`, если он свободен или уже принадлежит этому Compose-проекту. При конфликте `scripts/find_free_port.py` проверяет реальный socket bind и выбирает порт из `8100–8999`, записывает его в `.env`, после чего запускает Compose. Reverse proxy направляется на напечатанный `http://127.0.0.1:<порт>` и обязан передавать `Host` и `X-Forwarded-Proto`:
 
-Загруженные клиентские логотипы лежат в `MEDIA_ROOT/client_logos/`. Приложение само публично отдаёт только маршрут `/media/client_logos/...`, в том числе при `DEBUG=0`; остальные файлы из `MEDIA_ROOT` через этот endpoint недоступны. Это позволяет использовать абсолютные URL логотипов непосредственно в HTML, публикуемом на Joomla-донорах, без обязательного отдельного location для media в Nginx. Для большого объёма файлов reverse proxy позже можно настроить на прямую раздачу `/media/client_logos/`.
+```nginx
+proxy_set_header Host $host;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+```
+
+При `DEBUG=0` включены HTTPS redirect, secure session/CSRF cookies, HSTS, `nosniff`, same-origin referrer policy и `X-Frame-Options: DENY`. `SECURE_HSTS_INCLUDE_SUBDOMAINS` и `SECURE_HSTS_PRELOAD` намеренно выключены по умолчанию; включайте их только если HTTPS гарантирован для всех поддоменов.
+
+Загруженные клиентские логотипы лежат в `MEDIA_ROOT/client_logos/`. Приложение само публично отдаёт только непосредственные JPG, PNG, WebP и GIF-файлы из `/media/client_logos/`, в том числе при `DEBUG=0`; вложенные пути, traversal и остальные файлы из `MEDIA_ROOT` через этот endpoint недоступны. Это позволяет использовать абсолютные URL логотипов непосредственно в HTML, публикуемом на Joomla-донорах, без обязательного отдельного location для media в Nginx. Для большого объёма файлов reverse proxy позже можно настроить на прямую раздачу `/media/client_logos/`.
 
 `STATIC_URL` и `MEDIA_URL` заданы root-relative (`/static/` и `/media/`), поэтому ресурсы корректно работают и на вложенных URL панели.
 
 Обновление:
 
 ```bash
-git pull
+git pull --ff-only origin main
 ./scripts/deploy.sh
 ```
 
@@ -89,6 +97,14 @@ git pull
 - `article_category_id` — ID категории Joomla, по умолчанию `2` (обычно «Uncategorised/Без категории»).
 
 Создание выполняется через `article.apply`, чтобы получить назначенный Joomla ID. После ответа система проверяет managed-marker, сохраняет `article_id` и фактический alias в DonorSite и снимает edit-lock. Если ID или marker определить не удалось, операция фиксируется как ошибка и дальнейшая автоматическая синхронизация не продолжается.
+
+## Joomla 4/5: Web Services API
+
+Для Joomla 4/5 в доноре выберите «API Token». Если поле API URL пустое, JPC вычислит базовый URL вида `https://site.test/api/index.php/v1` из Admin URL; нестандартный базовый URL можно указать явно.
+
+В Joomla нужен отдельный сервисный пользователь с включённым API token, правом входа в Web Services (`core.login.api`) и правами просмотра, создания и редактирования материалов `com_content`. JPC использует штатные endpoints `content/articles`: GET для проверки/чтения, POST с `articletext` для создания и PATCH с `introtext`/`fulltext` для обновления.
+
+После POST полученный article ID и фактический alias сохраняются до повторной проверки managed-marker. Поэтому даже если Joomla отфильтровала marker и verification завершилась ошибкой, следующая синхронизация продолжит работу с уже созданным материалом и не создаст дубликат.
 
 ## Шаблоны страниц
 
