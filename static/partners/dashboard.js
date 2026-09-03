@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   const items = [...document.querySelectorAll('[data-donor-item]')];
   const search = document.querySelector('[data-donor-search-input]');
+  const topic = document.querySelector('[data-donor-topic-filter]');
   const status = document.querySelector('[data-donor-status-filter]');
   const empty = document.querySelector('[data-dashboard-no-results]');
   const expandedStorageKey = 'jpc-expanded-donors';
@@ -23,6 +24,24 @@ document.addEventListener('DOMContentLoaded', () => {
     ['#96546e', '#f0dde7'],
     ['#477c68', '#dcefe7'],
   ];
+
+  if (topic) {
+    topic.classList.add('dashboard-status-filter');
+    const topics = new Map();
+    items.forEach(item => {
+      const key = (item.dataset.donorTopic || '').trim().toLowerCase();
+      const label = (item.dataset.donorTopicLabel || '').trim();
+      if (key && label && !topics.has(key)) topics.set(key, label);
+    });
+    [...topics.entries()]
+      .sort((left, right) => left[1].localeCompare(right[1], 'ru'))
+      .forEach(([value, label]) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        topic.append(option);
+      });
+  }
 
   const hashClientKey = key => {
     let hash = 2166136261;
@@ -97,12 +116,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const applyFilters = () => {
     if (!items.length) return;
     const needle = (search?.value || '').trim().toLowerCase();
-    const selected = status?.value || 'all';
+    const selectedTopic = topic?.value || 'all';
+    const selectedStatus = status?.value || 'all';
     let visible = 0;
     items.forEach(item => {
       const matchesText = !needle || (item.dataset.donorSearch || '').includes(needle);
-      const matchesStatus = selected === 'all' || item.dataset.donorStatus === selected;
-      const show = matchesText && matchesStatus;
+      const matchesTopic = selectedTopic === 'all' || item.dataset.donorTopic === selectedTopic;
+      const matchesStatus = selectedStatus === 'all' || item.dataset.donorStatus === selectedStatus;
+      const show = matchesText && matchesTopic && matchesStatus;
       item.hidden = !show;
       if (show) visible += 1;
     });
@@ -110,6 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   search?.addEventListener('input', applyFilters);
+  topic?.addEventListener('change', applyFilters);
   status?.addEventListener('change', applyFilters);
   applyFilters();
 

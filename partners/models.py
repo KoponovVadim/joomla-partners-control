@@ -45,6 +45,7 @@ class DonorSite(TimeStampedModel):
 
     name = models.CharField("Название", max_length=200)
     domain = models.CharField("Домен", max_length=253, unique=True)
+    topic = models.CharField("Тематика сайта", max_length=120, blank=True, db_index=True)
     admin_url = models.URLField("Admin URL", max_length=500)
     page_url = models.URLField("URL страницы партнёров", max_length=500)
     joomla_version = models.CharField(
