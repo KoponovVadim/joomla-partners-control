@@ -4,7 +4,11 @@ from urllib.parse import parse_qs
 import httpx
 from django.test import TestCase
 
-from partners.joomla.exceptions import JoomlaPermissionError, ManagedMarkerMismatch
+from partners.joomla.exceptions import (
+    JoomlaArticleError,
+    JoomlaPermissionError,
+    ManagedMarkerMismatch,
+)
 from partners.joomla.joomla3 import Joomla3Adapter
 from partners.models import ArticleSnapshot, DonorSite
 from partners.services.credentials import encrypt_password
@@ -84,6 +88,8 @@ class MockJoomla3Adapter(Joomla3Adapter):
                 state["saves"] += 1
             if data.get("task") == ["article.apply"]:
                 state["html"] = data["jform[articletext]"][0]
+                if state.get("drop_managed_marker_on_create"):
+                    state["html"] = "<ul></ul>"
                 state["title"] = data["jform[title]"][0]
                 state["alias"] = data["jform[alias]"][0] or "partners-generated"
                 state["category_id"] = int(data["jform[catid]"][0])
@@ -153,6 +159,22 @@ class Joomla3AdapterTests(TestCase):
         self.assertIn(marker, self.state["html"])
         self.assertEqual(self.state["saves"], 1)
         self.assertEqual(self.state["cancels"], 1)
+
+    def test_create_article_persists_identity_before_marker_verification_failure(self):
+        self.donor.article_id = None
+        self.donor.article_alias = ""
+        self.donor.save(update_fields=["article_id", "article_alias", "updated_at"])
+        self.state["drop_managed_marker_on_create"] = True
+        marker = f"<!-- JPC-MANAGED-PAGE:{self.donor.managed_marker_uuid} -->"
+
+        with self.assertRaises(JoomlaArticleError) as caught:
+            self.adapter.create_article(html=marker + "\n<ul></ul>")
+
+        self.assertIn("создан и привязан к донору", str(caught.exception))
+        self.donor.refresh_from_db()
+        self.assertEqual(self.donor.article_id, 91)
+        self.assertEqual(self.donor.article_alias, "partners-generated")
+        self.assertEqual(self.state["saves"], 1)
 
     def test_adopt_backs_up_then_update_requires_marker(self):
         message = self.adapter.adopt_article(87)
