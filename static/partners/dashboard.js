@@ -5,6 +5,37 @@ document.addEventListener('DOMContentLoaded', () => {
   const empty = document.querySelector('[data-dashboard-no-results]');
   const expandedStorageKey = 'jpc-expanded-donors';
   const focusStorageKey = 'jpc-focus-donor';
+  const clientPalette = [
+    ['#5b7fa3', '#f3f7fb'],
+    ['#5f8f82', '#f2f8f6'],
+    ['#7b72a8', '#f6f4fa'],
+    ['#a57a58', '#faf6f2'],
+    ['#a56578', '#faf3f5'],
+    ['#6f8b5e', '#f5f8f2'],
+    ['#5f8797', '#f2f7f9'],
+    ['#8c7658', '#f8f5f1'],
+    ['#687ba8', '#f3f5fa'],
+    ['#8a8d5f', '#f7f7f2'],
+    ['#8a6d95', '#f7f3f8'],
+    ['#667f76', '#f3f7f5'],
+  ];
+
+  const colorIndexForKey = key => {
+    let hash = 2166136261;
+    for (let index = 0; index < key.length; index += 1) {
+      hash ^= key.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0) % clientPalette.length;
+  };
+
+  document.querySelectorAll('[data-client-key]').forEach(element => {
+    const key = (element.dataset.clientKey || '').trim().toLowerCase();
+    if (!key) return;
+    const [accent, tint] = clientPalette[colorIndexForKey(key)];
+    element.style.setProperty('--client-accent', accent);
+    element.style.setProperty('--client-tint', tint);
+  });
 
   let expandedDonors = new Set();
   try {
