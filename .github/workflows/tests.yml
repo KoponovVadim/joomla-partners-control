@@ -12,8 +12,12 @@ jobs:
     timeout-minutes: 10
     env:
       CREDENTIAL_ENCRYPTION_KEY: github-actions-test-key
-      SECRET_KEY: github-actions-secret-key
+      SECRET_KEY: ci-only-Django-secret-key-9f4C7z1N6q8W2m5R0x3V7b1K
       DEBUG: "0"
+      ALLOWED_HOSTS: testserver,localhost
+      CSRF_TRUSTED_ORIGINS: https://testserver
+      PUBLIC_BASE_URL: https://testserver
+      SECURE_SSL_REDIRECT: "0"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,8 +26,14 @@ jobs:
           cache: pip
       - name: Install dependencies
         run: pip install -r requirements.txt
+      - name: Check shell scripts
+        run: sh -n scripts/deploy.sh scripts/entrypoint.sh
       - name: Django system check
         run: python manage.py check
+      - name: Django deployment check
+        env:
+          SECURE_SSL_REDIRECT: "1"
+        run: python manage.py check --deploy
       - name: Check migrations
         run: python manage.py makemigrations --check --dry-run
       - name: Collect static files

@@ -12,6 +12,10 @@ for attempt in range(60):
         if attempt == 59: raise
         time.sleep(1)
 PY
+case "$(printf '%s' "${DEBUG:-0}" | tr '[:upper:]' '[:lower:]')" in
+  1|true|yes|on) ;;
+  *) python manage.py check --deploy ;;
+esac
 python manage.py migrate --noinput
 python manage.py collectstatic --noinput
 exec gunicorn jpc.wsgi:application --bind 0.0.0.0:8000 --workers "${GUNICORN_WORKERS:-3}" --timeout 60 --access-logfile -
