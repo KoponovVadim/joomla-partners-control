@@ -13,7 +13,7 @@ from .forms import ClientForm, DonorForm, PageTemplateForm, PlacementForm
 from .joomla import get_adapter
 from .joomla.exceptions import JoomlaError, JoomlaNotImplementedError
 from .models import ArticleSnapshot, ClientSite, DonorSite, PageTemplate, Placement, PublicationLog
-from .services.credentials import encrypt_password
+from .services.credentials import encrypt_password, encrypt_secret
 from .services.page_renderer import render_page
 
 
@@ -40,8 +40,11 @@ def donor_edit(request, pk=None):
     if request.method == "POST" and form.is_valid():
         donor = form.save(commit=False)
         password = form.cleaned_data["password"]
+        api_token = form.cleaned_data["api_token"]
         if password:
             donor.encrypted_password = encrypt_password(password)
+        if api_token:
+            donor.encrypted_api_token = encrypt_secret(api_token)
         donor.save()
         messages.success(request, "Настройки донора сохранены.")
         return redirect("dashboard")
@@ -220,8 +223,8 @@ def donor_sync(request, pk):
 @require_POST
 def donor_adopt(request, pk):
     donor = get_object_or_404(DonorSite, pk=pk)
-    if donor.joomla_version != "3" or not donor.article_id:
-        messages.error(request, "Для принятия укажите Joomla 3 и ID существующего материала.")
+    if donor.joomla_version not in {"3", "4", "5"} or not donor.article_id:
+        messages.error(request, "Для принятия укажите версию Joomla и ID существующего материала.")
         return redirect("donor-edit", pk=pk)
     status, message = _adapter_action(
         donor,
@@ -241,8 +244,8 @@ def donor_restore_snapshot(request, pk, snapshot_pk):
     donor = get_object_or_404(DonorSite, pk=pk)
     snapshot = get_object_or_404(ArticleSnapshot, pk=snapshot_pk, donor=donor)
 
-    if donor.joomla_version != "3" or not donor.article_id:
-        messages.error(request, "Восстановление snapshot сейчас доступно только для привязанного материала Joomla 3.")
+    if donor.joomla_version not in {"3", "4", "5"} or not donor.article_id:
+        messages.error(request, "Восстановление доступно только для привязанного материала Joomla.")
         return redirect("donor-edit", pk=pk)
     if snapshot.article_id != donor.article_id:
         messages.error(request, "Snapshot относится к другому ID материала и не может быть восстановлен автоматически.")
