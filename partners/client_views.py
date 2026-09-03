@@ -11,21 +11,33 @@ from .models import ClientSite
 def client_edit(request, pk=None):
     client = get_object_or_404(ClientSite, pk=pk) if pk else ClientSite()
     form = ClientForm(request.POST or None, request.FILES or None, instance=client)
+    has_variant_payload = request.method != "POST" or "descriptions-TOTAL_FORMS" in request.POST
     variants = ClientDescriptionVariantFormSet(
-        request.POST or None,
+        request.POST if request.method == "POST" and has_variant_payload else None,
         instance=client,
         prefix="descriptions",
     )
+    variants_valid = variants.is_valid() if request.method == "POST" and has_variant_payload else True
 
-    if request.method == "POST" and form.is_valid() and variants.is_valid():
+    if request.method == "POST" and form.is_valid() and variants_valid:
         with transaction.atomic():
             client = form.save()
-            variants.instance = client
-            saved_variants = variants.save()
+            if has_variant_payload:
+                variants.instance = client
+                variants.save()
+            else:
+                # Backward compatibility for old forms/scripts that still send one
+                # plain `description` field and know nothing about the formset.
+                legacy_description = request.POST.get("description", "").strip()
+                if legacy_description and not client.description_variants.exists():
+                    client.description_variants.create(
+                        name="Основное",
+                        text=legacy_description,
+                        position=1,
+                        enabled=True,
+                    )
 
-            active = list(
-                client.description_variants.order_by("position", "id")
-            )
+            active = list(client.description_variants.order_by("position", "id"))
             for position, variant in enumerate(active, start=1):
                 if variant.position != position:
                     variant.position = position
