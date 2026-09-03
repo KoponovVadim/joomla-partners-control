@@ -118,6 +118,9 @@ class JoomlaApiAdapter(JoomlaAdapter):
             ) from exc
 
         detail = self._error_detail(response)
+        token = client.headers.get("X-Joomla-Token", "")
+        if token:
+            detail = detail.replace(token, "[REDACTED]")
         suffix = f": {detail}" if detail else ""
         if 300 <= response.status_code < 400:
             raise JoomlaConnectionError(
