@@ -32,7 +32,7 @@
 <div class="donor-sheet-scroll"><div class="donor-sheet" data-donor-sheet>
   <div class="donor-sheet__header donor-sheet__grid" aria-hidden="true"><span></span><strong>Донор</strong><strong>Клиенты</strong><strong>Статус</strong><strong>Последняя публикация</strong><strong>Паразит 1</strong><strong>Паразит 2</strong><strong>Паразит 3</strong><strong>Паразит 4</strong><strong>Паразит 5</strong><strong></strong></div>
   {% for donor in donors %}
-  <article class="donor-sheet__item {% if not donor.enabled %}is-disabled{% endif %}" data-donor-item data-donor-search="{{ donor.domain|lower }} {{ donor.name|lower }}" data-donor-status="{% if not donor.enabled %}disabled{% else %}{{ donor.connection_status }}{% endif %}">
+  <article class="donor-sheet__item {% if not donor.enabled %}is-disabled{% endif %}" data-donor-item data-donor-id="{{ donor.pk }}" data-donor-search="{{ donor.domain|lower }} {{ donor.name|lower }}" data-donor-status="{% if not donor.enabled %}disabled{% else %}{{ donor.connection_status }}{% endif %}">
     <div class="donor-sheet__row donor-sheet__grid">
       <button class="donor-expand" type="button" data-donor-toggle aria-expanded="false" aria-controls="donor-detail-{{ donor.pk }}" title="Развернуть">›</button>
       <div class="donor-main-cell"><a class="donor-domain" href="{{ donor.page_url }}" target="_blank" rel="noopener">{{ donor.domain }} <span aria-hidden="true">↗</span></a><small>Joomla {{ donor.joomla_version }}{% if donor.article_id %} · материал #{{ donor.article_id }}{% endif %}</small></div>
