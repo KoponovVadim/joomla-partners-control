@@ -1,5 +1,5 @@
-from .api import JoomlaApiAdapter
+from .filtered_api import JoomlaFilteredMarkerApiAdapter
 
 
-class Joomla5Adapter(JoomlaApiAdapter):
+class Joomla5Adapter(JoomlaFilteredMarkerApiAdapter):
     version = "5"
