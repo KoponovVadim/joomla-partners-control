@@ -26,6 +26,8 @@ jobs:
           cache: pip
       - name: Install dependencies
         run: pip install -r requirements.txt
+      - name: Check shell scripts
+        run: sh -n scripts/deploy.sh scripts/entrypoint.sh
       - name: Django system check
         run: python manage.py check
       - name: Django deployment check
