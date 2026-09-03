@@ -6,6 +6,7 @@ from django.test import TestCase
 
 from partners.joomla.exceptions import (
     JoomlaArticleError,
+    JoomlaConnectionError,
     JoomlaPermissionError,
     ManagedMarkerMismatch,
 )
@@ -68,7 +69,11 @@ class MockJoomla3Adapter(Joomla3Adapter):
             if request.method == "GET" and "view=articles" in query:
                 return httpx.Response(200, text=article_list_form(), request=request)
             if request.method == "GET":
-                return httpx.Response(200, text=LOGIN, request=request)
+                return httpx.Response(
+                    200,
+                    text=state.get("login_html", LOGIN),
+                    request=request,
+                )
 
             data = parse_qs(request.content.decode(), keep_blank_values=True)
             if data.get("task") == ["login"]:
@@ -138,6 +143,36 @@ class Joomla3AdapterTests(TestCase):
         self.assertEqual(self.state["cancels"], 1)
         self.assertEqual(self.state["checkins"], 0)
         self.assertEqual(self.state["saves"], 0)
+
+    def test_connection_accepts_custom_login_form_id(self):
+        self.state["login_html"] = LOGIN.replace(
+            'id="form-login"',
+            'id="custom-login"',
+        )
+
+        message = self.adapter.test_connection()
+
+        self.assertIn("материал #87 доступен", message)
+
+    def test_connection_reports_1gb_hosting_login_barrier(self):
+        self.state["login_html"] = """
+        <html>
+          <head><title>1Gb.ru — Доступ в панель управления сайтом</title></head>
+          <body>
+            <p>Вы попали на страницу защиты от подбора паролей
+            к административному разделу вашего сайта.</p>
+            <script>var url = "/ipsec_set_cookies";</script>
+          </body>
+        </html>
+        """
+
+        with self.assertRaises(JoomlaConnectionError) as caught:
+            self.adapter.test_connection()
+
+        message = str(caught.exception)
+        self.assertIn("1Gb.ru", message)
+        self.assertIn("исходящий IP", message)
+        self.assertNotIn("secret", message)
 
     def test_create_article_saves_id_alias_category_and_managed_marker(self):
         self.donor.article_id = None
