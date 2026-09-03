@@ -1,6 +1,12 @@
 from django import forms
 
-from .models import ClientSite, DonorSite, PageTemplate, Placement
+from .models import (
+    ClientDescriptionVariant,
+    ClientSite,
+    DonorSite,
+    PageTemplate,
+    Placement,
+)
 
 
 MAX_LOGO_SIZE = 8 * 1024 * 1024
@@ -125,22 +131,20 @@ class ClientForm(StyledModelForm):
             "name",
             "domain",
             "logo",
-            "description",
             "link_text",
             "default_html",
             "notes",
             "enabled",
         ]
         widgets = {
-            "description": forms.Textarea(attrs={"rows": 6}),
             "default_html": forms.Textarea(attrs={"rows": 8, "class": "input code-editor"}),
             "notes": forms.Textarea(attrs={"rows": 3}),
         }
         help_texts = {
             "default_html": (
                 "Расширенный режим для старой или сложной разметки. Если поле заполнено, оно имеет "
-                "приоритет над текстовым описанием; JPC оставит в нём одну текстовую ссылку и приведёт "
-                "её URL и атрибуты к настройкам клиента."
+                "приоритет над всеми вариантами текстового описания; JPC оставит в нём одну текстовую "
+                "ссылку и приведёт её URL и атрибуты к настройкам клиента."
             )
         }
 
@@ -149,6 +153,25 @@ class ClientForm(StyledModelForm):
         if logo and getattr(logo, "size", 0) > MAX_LOGO_SIZE:
             raise forms.ValidationError("Картинка слишком большая. Максимальный размер — 8 МБ.")
         return logo
+
+
+class ClientDescriptionVariantForm(StyledModelForm):
+    class Meta:
+        model = ClientDescriptionVariant
+        fields = ["name", "text", "enabled"]
+        widgets = {
+            "name": forms.TextInput(attrs={"placeholder": "Например: Основное"}),
+            "text": forms.Textarea(attrs={"rows": 4, "placeholder": "Текст описания клиента…"}),
+        }
+
+
+ClientDescriptionVariantFormSet = forms.inlineformset_factory(
+    ClientSite,
+    ClientDescriptionVariant,
+    form=ClientDescriptionVariantForm,
+    extra=1,
+    can_delete=True,
+)
 
 
 class PageTemplateForm(StyledModelForm):
@@ -175,6 +198,7 @@ class PlacementForm(StyledModelForm):
     class Meta:
         model = Placement
         fields = [
+            "description_variant",
             "description_override",
             "link_text_override",
             "html_override",
@@ -190,8 +214,12 @@ class PlacementForm(StyledModelForm):
             "html_override": forms.Textarea(attrs={"rows": 8, "class": "input code-editor"}),
         }
         help_texts = {
+            "description_variant": (
+                "Авто — JPC выбирает один из активных вариантов клиента стабильно для этого донора. "
+                "Можно закрепить конкретный вариант вручную."
+            ),
             "description_override": (
-                "Оставьте пустым, чтобы использовать текстовое описание из карточки клиента."
+                "Необязательный ручной текст только для этого донора. Имеет приоритет над выбранным вариантом."
             ),
             "link_text_override": (
                 "Оставьте пустым, чтобы использовать текст ссылки из карточки клиента."
@@ -205,3 +233,21 @@ class PlacementForm(StyledModelForm):
                 "Заполняйте только если для этого размещения нужен другой URL картинки."
             ),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        field = self.fields.get("description_variant")
+        if field is not None:
+            field.empty_label = "Авто — распределять варианты"
+            if self.instance and self.instance.client_id:
+                field.queryset = ClientDescriptionVariant.objects.filter(
+                    client_id=self.instance.client_id
+                ).order_by("position", "id")
+            else:
+                field.queryset = ClientDescriptionVariant.objects.none()
+
+    def clean_description_variant(self):
+        variant = self.cleaned_data.get("description_variant")
+        if variant and self.instance.client_id and variant.client_id != self.instance.client_id:
+            raise forms.ValidationError("Этот вариант описания принадлежит другому клиенту.")
+        return variant
