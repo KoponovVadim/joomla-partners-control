@@ -5,7 +5,7 @@ class plgAjaxJpcconnector extends JPlugin
 {
     protected $autoloadLanguage = true;
     const PROTOCOL_VERSION = 1;
-    const CONNECTOR_VERSION = '1.0.0';
+    const CONNECTOR_VERSION = '1.0.1';
     const MAX_BODY_BYTES = 2097152;
 
     public function onAjaxJpcconnector()
@@ -215,7 +215,7 @@ class plgAjaxJpcconnector extends JPlugin
         return array(
             'id' => (int) $table->id,
             'title' => (string) $table->title,
-            'alias' => (string) $table->alias,
+            'alias' => isset($table->alias) ? (string) $table->alias : '',
             'body_html' => $this->articleBody($table),
         );
     }
@@ -271,6 +271,27 @@ class plgAjaxJpcconnector extends JPlugin
             isset($parts[0]) ? $parts[0] : '',
             isset($parts[1]) ? $parts[1] : '',
         );
+    }
+
+    private function storedBodyMatches($articleId, $introtext, $fulltext)
+    {
+        try {
+            $db = JFactory::getDbo();
+            $query = $db->getQuery(true)
+                ->select($db->quoteName(array('introtext', 'fulltext')))
+                ->from($db->quoteName('#__content'))
+                ->where($db->quoteName('id') . ' = ' . (int) $articleId);
+            $db->setQuery($query);
+            $stored = $db->loadAssoc();
+        } catch (Exception $exception) {
+            return false;
+        }
+
+        return is_array($stored)
+            && isset($stored['introtext'])
+            && isset($stored['fulltext'])
+            && (string) $stored['introtext'] === (string) $introtext
+            && (string) $stored['fulltext'] === (string) $fulltext;
     }
 
     private function createArticle($request)
@@ -379,7 +400,37 @@ class plgAjaxJpcconnector extends JPlugin
         $table->modified_by = 0;
         $table->version = (int) $table->version + 1;
 
-        if (!$table->check() || !$table->store(true)) {
+        if (!$table->check()) {
+            $error = $table->getError();
+            throw new RuntimeException(
+                $error ? $error : 'Joomla rejected article update',
+                500
+            );
+        }
+
+        try {
+            $stored = $table->store(true);
+        } catch (Exception $exception) {
+            if (!$this->storedBodyMatches(
+                (int) $table->id,
+                $introtext,
+                $fulltext
+            )) {
+                throw new RuntimeException(
+                    $exception->getMessage()
+                        ? $exception->getMessage()
+                        : 'Joomla rejected article update',
+                    500
+                );
+            }
+            $stored = true;
+        }
+
+        if (!$stored && !$this->storedBodyMatches(
+            (int) $table->id,
+            $introtext,
+            $fulltext
+        )) {
             $error = $table->getError();
             throw new RuntimeException(
                 $error ? $error : 'Joomla rejected article update',

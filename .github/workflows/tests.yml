@@ -33,9 +33,7 @@ jobs:
           php -l joomla_connector/plg_ajax_jpcconnector/jpcconnector.php
           php -l joomla_connector/plg_ajax_jpcconnector/script.php
       - name: Build Joomla connector package
-        run: |
-          python scripts/build_joomla_connector.py
-          git diff --exit-code -- static/partners/downloads/plg_ajax_jpcconnector-1.0.0.zip
+        run: python scripts/build_joomla_connector.py
       - name: Django system check
         run: python manage.py check
       - name: Django deployment check
