@@ -6,33 +6,64 @@ document.addEventListener('DOMContentLoaded', () => {
   const expandedStorageKey = 'jpc-expanded-donors';
   const focusStorageKey = 'jpc-focus-donor';
   const clientPalette = [
-    ['#5b7fa3', '#f3f7fb'],
-    ['#5f8f82', '#f2f8f6'],
-    ['#7b72a8', '#f6f4fa'],
-    ['#a57a58', '#faf6f2'],
-    ['#a56578', '#faf3f5'],
-    ['#6f8b5e', '#f5f8f2'],
-    ['#5f8797', '#f2f7f9'],
-    ['#8c7658', '#f8f5f1'],
-    ['#687ba8', '#f3f5fa'],
-    ['#8a8d5f', '#f7f7f2'],
-    ['#8a6d95', '#f7f3f8'],
-    ['#667f76', '#f3f7f5'],
+    ['#3972a8', '#dceafa'],
+    ['#43805c', '#dff0e4'],
+    ['#9a6b21', '#f5e7c8'],
+    ['#7056a1', '#e9e0f5'],
+    ['#a25570', '#f4dde5'],
+    ['#367b91', '#dceff3'],
+    ['#75813c', '#e9edcf'],
+    ['#a45f3d', '#f5dfd2'],
+    ['#5268a0', '#e0e5f4'],
+    ['#357e77', '#d9eeeb'],
+    ['#875b83', '#efe0ec'],
+    ['#5f7f4d', '#e3eddd'],
+    ['#4f7188', '#dde8ef'],
+    ['#8f6c35', '#efe3cf'],
+    ['#96546e', '#f0dde7'],
+    ['#477c68', '#dcefe7'],
   ];
 
-  const colorIndexForKey = key => {
+  const hashClientKey = key => {
     let hash = 2166136261;
     for (let index = 0; index < key.length; index += 1) {
       hash ^= key.charCodeAt(index);
       hash = Math.imul(hash, 16777619);
     }
-    return (hash >>> 0) % clientPalette.length;
+    return hash >>> 0;
   };
 
-  document.querySelectorAll('[data-client-key]').forEach(element => {
+  const clientElements = [...document.querySelectorAll('[data-client-key]')];
+  const clientKeys = [...new Set(
+    clientElements
+      .map(element => (element.dataset.clientKey || '').trim().toLowerCase())
+      .filter(Boolean)
+  )].sort((left, right) => {
+    const hashDifference = hashClientKey(left) - hashClientKey(right);
+    return hashDifference || left.localeCompare(right);
+  });
+
+  const paletteByClient = new Map();
+  const usedPaletteIndexes = new Set();
+  clientKeys.forEach(key => {
+    const preferred = hashClientKey(key) % clientPalette.length;
+    let paletteIndex = preferred;
+
+    if (usedPaletteIndexes.size < clientPalette.length) {
+      while (usedPaletteIndexes.has(paletteIndex)) {
+        paletteIndex = (paletteIndex + 5) % clientPalette.length;
+      }
+      usedPaletteIndexes.add(paletteIndex);
+    }
+
+    paletteByClient.set(key, clientPalette[paletteIndex]);
+  });
+
+  clientElements.forEach(element => {
     const key = (element.dataset.clientKey || '').trim().toLowerCase();
-    if (!key) return;
-    const [accent, tint] = clientPalette[colorIndexForKey(key)];
+    const color = paletteByClient.get(key);
+    if (!color) return;
+    const [accent, tint] = color;
     element.style.setProperty('--client-accent', accent);
     element.style.setProperty('--client-tint', tint);
   });
