@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="plugin" version="3.10" group="ajax" method="upgrade">
+    <name>JPC Connector</name>
+    <author>Joomla Partners Control</author>
+    <creationDate>2026-09</creationDate>
+    <copyright>Copyright (C) Joomla Partners Control</copyright>
+    <license>GNU General Public License version 2 or later</license>
+    <version>1.0.0</version>
+    <description>
+        Защищённый connector для управления материалом партнёров из JPC
+        через публичный Joomla Ajax Interface.
+    </description>
+    <scriptfile>script.php</scriptfile>
+    <files>
+        <filename plugin="jpcconnector">jpcconnector.php</filename>
+        <filename>script.php</filename>
+        <filename>README.txt</filename>
+        <filename>index.html</filename>
+    </files>
+    <config>
+        <fields name="params">
+            <fieldset name="basic" label="JPC Connector">
+                <field
+                    name="token"
+                    type="text"
+                    label="Connector Token"
+                    description="После установки token создан автоматически. Скопируйте его в JPC. После первого успешного запроса token заменяется необратимым хешем. Для смены вставьте новый token длиной не менее 32 символов."
+                    size="80"
+                    filter="raw"
+                    required="true"
+                />
+                <field
+                    name="allowed_ip"
+                    type="text"
+                    label="Разрешённый IP JPC"
+                    description="Необязательно. Исходящий IP production-сервера JPC. Можно указать несколько IP через запятую."
+                    size="50"
+                    filter="string"
+                />
+            </fieldset>
+        </fields>
+    </config>
+</extension>
