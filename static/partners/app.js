@@ -46,9 +46,32 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  const editor = document.querySelector('[name=default_html]');
+  const htmlEditor = document.querySelector('[name=default_html]');
+  const descriptionEditor = document.querySelector('[name=description]');
+  const linkTextInput = document.querySelector('[name=link_text]');
+  const clientNameInput = document.querySelector('[name=name]');
+  const domainInput = document.querySelector('[name=domain]');
   const liveFrame = document.querySelector('.live-preview iframe');
-  if (editor && liveFrame) { const update = () => liveFrame.srcdoc = editor.value; editor.addEventListener('input', update); update(); }
+  if (liveFrame && htmlEditor) {
+    const escapeHtml = value => String(value || '').replace(/[&<>"']/g, char => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+    })[char]);
+    const update = () => {
+      if (htmlEditor.value.trim()) {
+        liveFrame.srcdoc = htmlEditor.value;
+        return;
+      }
+      const description = escapeHtml(descriptionEditor?.value).replace(/\r?\n/g, '<br>');
+      const linkText = escapeHtml(linkTextInput?.value.trim() || clientNameInput?.value.trim() || 'Перейти на сайт');
+      const rawUrl = domainInput?.value.trim() || '#';
+      const url = /^(https?:)?\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl.replace(/^\/+|\/+$/g, '')}`;
+      liveFrame.srcdoc = `${description}${description ? ' ' : ''}<a href="${escapeHtml(url)}">${linkText}</a>`;
+    };
+    [htmlEditor, descriptionEditor, linkTextInput, clientNameInput, domainInput]
+      .filter(Boolean)
+      .forEach(field => field.addEventListener('input', update));
+    update();
+  }
   const previewSource = document.querySelector('#preview-source');
   const previewFrame = document.querySelector('#page-preview');
   if (previewSource && previewFrame) previewFrame.srcdoc = JSON.parse(previewSource.textContent);
