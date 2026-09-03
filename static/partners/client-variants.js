@@ -2,6 +2,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const root = document.querySelector('[data-description-formset]');
   if (!root) return;
 
+  root.closest('.form-layout')?.classList.add('client-form-layout');
+
   const list = root.querySelector('[data-description-list]');
   const template = root.querySelector('[data-description-empty]');
   const total = root.querySelector('[name="descriptions-TOTAL_FORMS"]');
