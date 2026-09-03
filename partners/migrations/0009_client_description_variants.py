@@ -63,5 +63,10 @@ class Migration(migrations.Migration):
             name="description_variant",
             field=models.ForeignKey(blank=True, help_text="Пусто — JPC стабильно распределяет варианты по донорам автоматически.", null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="placements", to="partners.clientdescriptionvariant", verbose_name="Вариант описания"),
         ),
+        migrations.AlterField(
+            model_name="clientsite",
+            name="description",
+            field=models.TextField(blank=True, help_text="Legacy fallback. Новые описания редактируются через варианты описания.", verbose_name="Текстовое описание"),
+        ),
         migrations.RunPython(copy_legacy_descriptions, restore_legacy_descriptions),
     ]
