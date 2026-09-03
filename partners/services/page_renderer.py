@@ -153,6 +153,31 @@ def _html_fragment(value, link_text, url, placement):
     return str(soup)
 
 
+def _legacy_advanced_client_html(value, link_text, url, placement):
+    """Keep old default_html behavior for data that has not migrated yet."""
+
+    soup = BeautifulSoup(value or "", "html.parser")
+    links = list(soup.find_all("a"))
+    text_link = next((link for link in links if link.find("img") is None), None)
+
+    for link in links:
+        if link is not text_link:
+            link.unwrap()
+
+    if text_link is None:
+        if soup.contents:
+            soup.append(" ")
+        text_link = soup.new_tag("a")
+        text_link.string = link_text
+        soup.append(text_link)
+    elif not text_link.get_text(strip=True):
+        text_link.clear()
+        text_link.string = link_text
+
+    _apply_link_attributes(text_link, url, placement)
+    return str(soup)
+
+
 def _active_description_variants(client):
     return [
         variant
@@ -205,7 +230,7 @@ def _client_html(placement, url):
         return _html_fragment(variant_html, link_text, url, placement)
 
     if client.default_html.strip():
-        return _html_fragment(client.default_html, link_text, url, placement)
+        return _legacy_advanced_client_html(client.default_html, link_text, url, placement)
 
     return _plain_client_html(client.description, link_text, url, placement)
 
@@ -228,8 +253,8 @@ def _validate_partner_item(item_html, template_name, client_name, expected_url):
     if not valid:
         raise ValueError(
             f"Шаблон «{template_name}» не может сформировать партнёра «{client_name}»: "
-            "каждый <li> должен содержать одну ссылку вокруг картинки и минимум одну "
-            "текстовую ссылку в HTML описания."
+            "каждый <li> должен содержать ровно две группы ссылок — одну вокруг картинки "
+            "и одну или несколько текстовых ссылок в HTML описания."
         )
 
 
