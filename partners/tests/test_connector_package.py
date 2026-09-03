@@ -1,4 +1,6 @@
 from pathlib import Path
+import subprocess
+import sys
 from xml.etree import ElementTree
 from zipfile import ZipFile
 
@@ -49,7 +51,12 @@ class JoomlaConnectorPackageTests(SimpleTestCase):
         self.assertIn("const CONNECTOR_VERSION = '1.0.1';", source)
 
     def test_installable_zip_contains_current_sources(self):
-        self.assertTrue(PACKAGE.is_file(), "Connector ZIP must be committed")
+        subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "build_joomla_connector.py")],
+            cwd=ROOT,
+            check=True,
+        )
+        self.assertTrue(PACKAGE.is_file(), "Connector ZIP must be built")
 
         with ZipFile(PACKAGE) as archive:
             self.assertEqual(set(archive.namelist()), REQUIRED_FILES)
