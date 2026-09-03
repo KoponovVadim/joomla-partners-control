@@ -190,6 +190,50 @@ class DonorAuthViewTests(TestCase):
         self.assertNotContains(edit, donor.encrypted_api_token)
         self.assertContains(edit, "API Token сохранён в зашифрованном виде")
 
+    def test_create_joomla3_connector_donor_encrypts_token(self):
+        token = "ab" * 32
+        response = self.client.post(
+            reverse("donor-create"),
+            {
+                "name": "Joomla 3 connector donor",
+                "domain": "j3-connector.test",
+                "admin_url": "https://j3-connector.test/administrator/",
+                "page_url": "https://j3-connector.test/partners",
+                "joomla_version": DonorSite.JoomlaVersion.V3,
+                "auth_mode": DonorSite.AuthMode.CONNECTOR_TOKEN,
+                "username": "",
+                "password": "",
+                "api_url": "",
+                "api_token": "",
+                "connector_url": "",
+                "connector_token": token,
+                "article_id": "46",
+                "article_title": "Partners",
+                "article_category_id": "2",
+                "menu_item_id": "",
+                "article_alias": "partners",
+                "template": "",
+                "enabled": "on",
+                "notes": "",
+            },
+        )
+
+        self.assertRedirects(response, reverse("dashboard"))
+        donor = DonorSite.objects.get(domain="j3-connector.test")
+        self.assertNotIn(token, donor.encrypted_connector_token)
+        self.assertEqual(
+            decrypt_secret(donor.encrypted_connector_token),
+            token,
+        )
+
+        edit = self.client.get(reverse("donor-edit", args=[donor.pk]))
+        self.assertNotContains(edit, token)
+        self.assertNotContains(edit, donor.encrypted_connector_token)
+        self.assertContains(
+            edit,
+            "JPC Connector Token сохранён в зашифрованном виде",
+        )
+
 
 class SnapshotViewTests(TestCase):
     def setUp(self):
