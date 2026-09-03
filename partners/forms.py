@@ -31,6 +31,16 @@ class DonorForm(StyledModelForm):
         ),
     )
 
+    connector_token = forms.CharField(
+        label="JPC Connector Token",
+        required=False,
+        widget=forms.PasswordInput(render_value=False),
+        help_text=(
+            "Для Joomla 3 с установленным JPC Connector. Минимум 32 символа; "
+            "хранится в зашифрованном виде. Оставьте пустым, чтобы сохранить текущий."
+        ),
+    )
+
     class Meta:
         model = DonorSite
         fields = [
@@ -44,6 +54,8 @@ class DonorForm(StyledModelForm):
             "password",
             "api_url",
             "api_token",
+            "connector_url",
+            "connector_token",
             "article_id",
             "article_title",
             "article_category_id",
@@ -60,8 +72,28 @@ class DonorForm(StyledModelForm):
         version = cleaned.get("joomla_version")
         auth_mode = cleaned.get("auth_mode")
 
-        if version == DonorSite.JoomlaVersion.V3 and auth_mode != DonorSite.AuthMode.PASSWORD:
-            self.add_error("auth_mode", "Для Joomla 3 используется вход по логину и паролю.")
+        if version == DonorSite.JoomlaVersion.V3:
+            allowed_modes = {
+                DonorSite.AuthMode.PASSWORD,
+                DonorSite.AuthMode.CONNECTOR_TOKEN,
+            }
+            if auth_mode not in allowed_modes:
+                self.add_error(
+                    "auth_mode",
+                    "Для Joomla 3 выберите пароль или JPC Connector.",
+                )
+            elif auth_mode == DonorSite.AuthMode.CONNECTOR_TOKEN:
+                token = cleaned.get("connector_token") or ""
+                if not token and not self.instance.connector_token_is_set:
+                    self.add_error(
+                        "connector_token",
+                        "Укажите token из настроек плагина JPC Connector.",
+                    )
+                elif token and len(token) < 32:
+                    self.add_error(
+                        "connector_token",
+                        "Connector token должен содержать минимум 32 символа.",
+                    )
         elif version in {DonorSite.JoomlaVersion.V4, DonorSite.JoomlaVersion.V5}:
             if auth_mode != DonorSite.AuthMode.API_TOKEN:
                 self.add_error("auth_mode", "Для Joomla 4/5 выберите авторизацию по API Token.")
