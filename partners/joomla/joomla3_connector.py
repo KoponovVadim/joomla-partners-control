@@ -205,6 +205,34 @@ class Joomla3ConnectorAdapter(JoomlaAdapter):
             reason=reason,
         )
 
+    def _write_and_verify(
+        self,
+        client,
+        action,
+        article_id,
+        html,
+        **payload,
+    ):
+        """Treat a failed write response as success only if Joomla stored it."""
+        try:
+            self._command(
+                client,
+                action,
+                article_id=int(article_id),
+                html=html,
+                **payload,
+            )
+        except JoomlaArticleError as write_error:
+            try:
+                verified = self._get_article(client, article_id)
+            except Exception:
+                raise write_error
+            if verified.body_html != html:
+                raise write_error
+            return verified, True
+
+        return self._get_article(client, article_id), False
+
     def test_connection(self):
         with self._http_client() as client:
             info = self._command(client, "ping")
@@ -295,21 +323,26 @@ class Joomla3ConnectorAdapter(JoomlaAdapter):
 
             snapshot = self._save_snapshot(article, "before_adoption")
             new_html = marker_html + "\n" + article.body_html
-            self._command(
+            verified, recovered = self._write_and_verify(
                 client,
                 "adopt",
-                article_id=int(article_id),
-                html=new_html,
+                article_id,
+                new_html,
                 marker_uuid=marker,
                 expected_hash=sha256(
                     article.body_html.encode()
                 ).hexdigest(),
             )
-            verified = self._get_article(client, article_id)
             if not has_managed_marker(verified.body_html, self.donor):
                 raise JoomlaArticleError(
                     "JPC Connector не сохранил managed-marker; "
                     "исходный HTML сохранён в snapshot"
+                )
+            if recovered:
+                return (
+                    f"Материал #{article_id} принят под управление; "
+                    "запись подтверждена после ошибки Connector; "
+                    f"backup snapshot #{snapshot.pk}"
                 )
             return (
                 f"Материал #{article_id} принят под управление; "
@@ -331,20 +364,25 @@ class Joomla3ConnectorAdapter(JoomlaAdapter):
                 )
 
             snapshot = self._save_snapshot(article, "before_update")
-            self._command(
+            verified, recovered = self._write_and_verify(
                 client,
                 "update",
-                article_id=int(article_id),
-                html=html,
+                article_id,
+                html,
                 marker_uuid=str(self.donor.managed_marker_uuid),
                 expected_hash=sha256(
                     article.body_html.encode()
                 ).hexdigest(),
             )
-            verified = self._get_article(client, article_id)
             if not has_managed_marker(verified.body_html, self.donor):
                 raise JoomlaArticleError(
                     "Проверка после записи не пройдена; "
+                    f"backup snapshot #{snapshot.pk}"
+                )
+            if recovered:
+                return (
+                    f"Материал #{article_id} обновлён; запись подтверждена "
+                    "после ошибки Connector; "
                     f"backup snapshot #{snapshot.pk}"
                 )
             return (
