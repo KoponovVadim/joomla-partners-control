@@ -7,6 +7,7 @@
   <title>{% block title %}Joomla Partners Control{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'partners/app.css' %}">
   <link rel="stylesheet" href="{% static 'partners/logo-upload.css' %}">
+  {% block extra_head %}{% endblock %}
   <script src="{% static 'partners/app.js' %}" defer></script>
 </head>
 <body>
@@ -26,4 +27,3 @@
 </main>
 </body>
 </html>
-
