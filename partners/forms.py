@@ -51,6 +51,7 @@ class DonorForm(StyledModelForm):
         fields = [
             "name",
             "domain",
+            "topic",
             "admin_url",
             "page_url",
             "joomla_version",
@@ -70,7 +71,13 @@ class DonorForm(StyledModelForm):
             "enabled",
             "notes",
         ]
-        widgets = {"notes": forms.Textarea(attrs={"rows": 3})}
+        widgets = {
+            "topic": forms.TextInput(attrs={"placeholder": "Например: строительство, авто, юристы"}),
+            "notes": forms.Textarea(attrs={"rows": 3}),
+        }
+        help_texts = {
+            "topic": "Используется для поиска и фильтрации доноров при распределении ссылок.",
+        }
 
     def clean(self):
         cleaned = super().clean()
