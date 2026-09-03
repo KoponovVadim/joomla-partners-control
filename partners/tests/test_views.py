@@ -129,7 +129,7 @@ class TemplateViewTests(TestCase):
                 "version": 2,
             },
         )
-        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, reverse("template-edit", args=[self.second.pk]))
         self.first.refresh_from_db()
         self.second.refresh_from_db()
         self.assertEqual(self.first.name, "First")
@@ -177,8 +177,8 @@ class DonorAuthViewTests(TestCase):
             },
         )
 
-        self.assertRedirects(response, reverse("dashboard"))
         donor = DonorSite.objects.get(domain="j5.test")
+        self.assertRedirects(response, reverse("donor-edit", args=[donor.pk]))
         self.assertNotIn("plain-api-token", donor.encrypted_api_token)
         self.assertEqual(
             decrypt_secret(donor.encrypted_api_token),
@@ -218,8 +218,8 @@ class DonorAuthViewTests(TestCase):
             },
         )
 
-        self.assertRedirects(response, reverse("dashboard"))
         donor = DonorSite.objects.get(domain="j3-connector.test")
+        self.assertRedirects(response, reverse("donor-edit", args=[donor.pk]))
         self.assertNotIn(token, donor.encrypted_connector_token)
         self.assertEqual(
             decrypt_secret(donor.encrypted_connector_token),

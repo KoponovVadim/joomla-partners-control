@@ -50,7 +50,7 @@ def donor_edit(request, pk=None):
             donor.encrypted_connector_token = encrypt_secret(connector_token)
         donor.save()
         messages.success(request, "Настройки донора сохранены.")
-        return redirect("dashboard")
+        return redirect("donor-edit", pk=donor.pk)
     snapshots = donor.article_snapshots.all()[:12] if donor else []
     return render(
         request,
@@ -72,7 +72,7 @@ def client_edit(request, pk=None):
     if request.method == "POST" and form.is_valid():
         client = form.save()
         messages.success(request, "Клиент сохранён.")
-        return redirect("dashboard")
+        return redirect("client-edit", pk=client.pk)
     return render(
         request,
         "partners/form.html",
@@ -98,7 +98,7 @@ def template_edit(request, pk=None):
     if request.method == "POST" and form.is_valid():
         saved = form.save()
         messages.success(request, f"Шаблон «{saved.name}» сохранён.")
-        return redirect("template-list")
+        return redirect("template-edit", pk=saved.pk)
     return render(
         request,
         "partners/form.html",
@@ -116,9 +116,9 @@ def placement_edit(request, pk):
     placement = get_object_or_404(Placement.objects.select_related("donor", "client"), pk=pk)
     form = PlacementForm(request.POST or None, instance=placement)
     if request.method == "POST" and form.is_valid():
-        form.save()
+        placement = form.save()
         messages.success(request, "Настройки размещения сохранены.")
-        return redirect("dashboard")
+        return redirect("placement-edit", pk=placement.pk)
     return render(
         request,
         "partners/form.html",
