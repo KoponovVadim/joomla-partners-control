@@ -1,5 +1,6 @@
 import os
 
+from bs4 import BeautifulSoup
 from django.test import TestCase, override_settings
 
 from partners.forms import DonorForm
@@ -14,7 +15,11 @@ class RendererTests(TestCase):
             name="Test",
             slug="test-renderer",
             wrapper_html="<ul>{{ items }}</ul>",
-            item_html='<li><a href="{{ url }}"{{ link_attributes }}><img src="{{ image }}" alt="{{ client_name }}">{{ client_html }}</a></li>',
+            item_html=(
+                '<li><div class="Img"><a href="{{ url }}"{{ link_attributes }}>'
+                '<img src="{{ image }}" alt="{{ client_name }}"></a></div>'
+                '<div class="txt">{{ client_html }}</div></li>'
+            ),
             css=".x{}",
             include_css_in_article=True,
         )
@@ -59,6 +64,67 @@ class RendererTests(TestCase):
         self.assertTrue(has_managed_marker(page.body_html, self.donor))
         self.assertEqual(len(page.body_hash), 64)
         self.assertIn("One &amp; Co", page.body_html)
+        items = BeautifulSoup(page.body_html, "html.parser").select("ul > li")
+        self.assertEqual(len(items), 2)
+        self.assertTrue(all(len(item.find_all("a")) == 2 for item in items))
+
+    def test_plain_description_is_escaped_and_gets_exactly_one_text_link(self):
+        client = ClientSite.objects.create(
+            name="Safe & Co",
+            domain="safe.test",
+            description="Builds <strong>sites</strong>\nFast & safe",
+            link_text="Visit & learn",
+        )
+        Placement.objects.create(
+            donor=self.donor,
+            client=client,
+            target_blank=True,
+            nofollow=True,
+        )
+
+        page = render_page(self.donor)
+        item = BeautifulSoup(page.body_html, "html.parser").select_one("li")
+        image_link = item.select_one(".Img > a")
+        text_link = item.select_one(".txt a")
+
+        self.assertEqual(len(item.find_all("a")), 2)
+        self.assertEqual(image_link["href"], "https://safe.test")
+        self.assertEqual(text_link["href"], "https://safe.test")
+        self.assertEqual(text_link.get_text(strip=True), "Visit & learn")
+        self.assertEqual(image_link["target"], "_blank")
+        self.assertEqual(text_link["target"], "_blank")
+        self.assertEqual(text_link["rel"], ["noopener", "nofollow"])
+        self.assertNotIn("<strong>", str(item.select_one(".txt")))
+        self.assertIn("&lt;strong&gt;", str(item.select_one(".txt")))
+        self.assertIn("<br", str(item.select_one(".txt")))
+
+    def test_advanced_html_keeps_content_but_normalizes_to_one_text_link(self):
+        self.one.default_html = (
+            '<p>See <a href="https://old.test/one">first</a> and '
+            '<a href="https://old.test/two">second</a>.</p>'
+        )
+        self.one.save(update_fields=["default_html"])
+        Placement.objects.create(donor=self.donor, client=self.one)
+
+        item = BeautifulSoup(render_page(self.donor).body_html, "html.parser").select_one("li")
+        text_links = [link for link in item.find_all("a") if link.find("img") is None]
+
+        self.assertEqual(len(item.find_all("a")), 2)
+        self.assertEqual(len(text_links), 1)
+        self.assertEqual(text_links[0]["href"], "https://one.test")
+        self.assertIn("first", item.get_text(" ", strip=True))
+        self.assertIn("second", item.get_text(" ", strip=True))
+
+    def test_invalid_item_template_is_blocked_before_sync(self):
+        self.template.item_html = (
+            '<li><div class="Img"><img src="{{ image }}" alt="{{ client_name }}"></div>'
+            '<div class="txt">{{ client_html }}</div></li>'
+        )
+        self.template.save(update_fields=["item_html"])
+        Placement.objects.create(donor=self.donor, client=self.one)
+
+        with self.assertRaisesRegex(ValueError, "ровно две"):
+            render_page(self.donor)
 
     def test_disabled_client_is_ignored(self):
         self.one.enabled = False
