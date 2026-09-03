@@ -7,7 +7,7 @@
     {% if form.non_field_errors %}<div class="message error">{{ form.non_field_errors }}</div>{% endif %}
     <div class="form-grid">
     {% for field in form %}
-      <div class="field {% if field.name == 'default_html' or field.name == 'html_override' or field.name == 'wrapper_html' or field.name == 'item_html' or field.name == 'css' or field.name == 'notes' or field.name == 'logo' %}span-2{% endif %} {% if field.field.widget.input_type == 'checkbox' %}check-field{% endif %}">
+      <div class="field {% if field.name == 'description' or field.name == 'description_override' or field.name == 'default_html' or field.name == 'html_override' or field.name == 'wrapper_html' or field.name == 'item_html' or field.name == 'css' or field.name == 'notes' or field.name == 'logo' %}span-2{% endif %} {% if field.field.widget.input_type == 'checkbox' %}check-field{% endif %}">
         <label for="{{ field.id_for_label }}">{{ field.label }}</label>
         {% if kind == 'client' and field.name == 'logo' %}
           <div class="logo-upload-box">
@@ -31,7 +31,7 @@
     {% if kind == 'donor' and object and not object.article_id %}<p class="muted small-text">ID материала не указан: при первой синхронизации Joomla 3 попробует создать новый материал с заданными заголовком, alias и категорией.</p>{% endif %}
     <div class="form-actions"><button class="btn primary">Сохранить</button><a class="btn" href="{% if kind == 'template' %}{% url 'template-list' %}{% else %}{% url 'dashboard' %}{% endif %}">Отмена</a></div>
   </form>
-  {% if kind == 'client' %}<aside class="panel live-preview"><div class="section-label">Предпросмотр HTML</div><iframe title="Предпросмотр клиента" sandbox="allow-popups"></iframe><p class="muted small-text">Скрипты отключены изолированным iframe.</p></aside>{% endif %}
+  {% if kind == 'client' %}<aside class="panel live-preview"><div class="section-label">Предпросмотр описания</div><iframe title="Предпросмотр клиента" sandbox="allow-popups"></iframe><p class="muted small-text">Для обычного текста ссылка формируется автоматически. Расширенный HTML в итоговом материале нормализуется до одной текстовой ссылки.</p></aside>{% endif %}
 </div>
 {% if kind == 'donor' and object %}
 <div class="standalone-action actions"><form method="post" action="{% url 'donor-test' object.pk %}">{% csrf_token %}<button class="btn">Проверить подключение</button></form>{% if object.joomla_version == '3' and object.article_id %}<form method="post" action="{% url 'donor-adopt' object.pk %}" data-confirm="Будет сохранена резервная копия HTML и в материал добавится невидимый managed-marker. Продолжить?">{% csrf_token %}<button class="btn">Принять материал под управление</button></form>{% endif %}</div>
