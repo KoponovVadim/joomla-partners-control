@@ -10,7 +10,7 @@ class DonorAdmin(admin.ModelAdmin):
     list_display = ("domain", "joomla_version", "connection_status", "enabled", "last_published_at")
     list_filter = ("joomla_version", "connection_status", "enabled")
     search_fields = ("name", "domain")
-    exclude = ("encrypted_password", "encrypted_api_token")
+    exclude = ("encrypted_password", "encrypted_api_token", "encrypted_connector_token")
     inlines = [PlacementInline]
 
 @admin.register(ClientSite)

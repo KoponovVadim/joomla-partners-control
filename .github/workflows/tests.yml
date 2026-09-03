@@ -28,6 +28,14 @@ jobs:
         run: pip install -r requirements.txt
       - name: Check shell scripts
         run: sh -n scripts/deploy.sh scripts/entrypoint.sh
+      - name: Check Joomla connector PHP
+        run: |
+          php -l joomla_connector/plg_ajax_jpcconnector/jpcconnector.php
+          php -l joomla_connector/plg_ajax_jpcconnector/script.php
+      - name: Build Joomla connector package
+        run: |
+          python scripts/build_joomla_connector.py
+          git diff --exit-code -- static/partners/downloads/plg_ajax_jpcconnector-1.0.0.zip
       - name: Django system check
         run: python manage.py check
       - name: Django deployment check
@@ -40,3 +48,9 @@ jobs:
         run: python manage.py collectstatic --noinput
       - name: Run tests
         run: python manage.py test
+      - name: Upload Joomla 3 connector
+        uses: actions/upload-artifact@v4
+        with:
+          name: plg_ajax_jpcconnector-1.0.0
+          path: static/partners/downloads/plg_ajax_jpcconnector-1.0.0.zip
+          if-no-files-found: error

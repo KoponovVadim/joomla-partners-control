@@ -16,6 +16,9 @@ class JoomlaAdapter(ABC):
     def api_token(self):
         return decrypt_secret(self.donor.encrypted_api_token)
 
+    def connector_token(self):
+        return decrypt_secret(self.donor.encrypted_connector_token)
+
     def _unavailable(self, operation):
         raise JoomlaNotImplementedError(
             f"Адаптер Joomla {self.version}: {operation} пока не реализована"

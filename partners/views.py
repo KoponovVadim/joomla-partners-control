@@ -41,10 +41,13 @@ def donor_edit(request, pk=None):
         donor = form.save(commit=False)
         password = form.cleaned_data["password"]
         api_token = form.cleaned_data["api_token"]
+        connector_token = form.cleaned_data["connector_token"]
         if password:
             donor.encrypted_password = encrypt_password(password)
         if api_token:
             donor.encrypted_api_token = encrypt_secret(api_token)
+        if connector_token:
+            donor.encrypted_connector_token = encrypt_secret(connector_token)
         donor.save()
         messages.success(request, "Настройки донора сохранены.")
         return redirect("dashboard")
