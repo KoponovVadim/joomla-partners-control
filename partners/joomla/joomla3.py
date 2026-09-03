@@ -276,28 +276,36 @@ class Joomla3Adapter(JoomlaAdapter):
                 raise JoomlaArticleError(
                     "Joomla сохранила форму без определяемого ID материала; автоматическая привязка остановлена"
                 )
-            if not saved_form:
-                raise JoomlaArticleError(
-                    f"Материал, вероятно, создан как #{article_id}, но Joomla не вернула форму для проверки"
-                )
 
-            editor = saved_form.select_one('[name="jform[articletext]"]')
-            saved_html = editor.decode_contents(formatter=None) if editor else ""
-            alias_field = saved_form.select_one('[name="jform[alias]"]')
-            saved_alias = alias_field.get("value", "") if alias_field else alias
-            self._cancel_article(client, saved, saved_form)
+            saved_alias = alias
+            if saved_form:
+                alias_field = saved_form.select_one('[name="jform[alias]"]')
+                saved_alias = alias_field.get("value", "") if alias_field else alias
 
-            if not has_managed_marker(saved_html, self.donor):
-                raise JoomlaArticleError(
-                    f"Материал #{article_id} создан, но managed-marker после записи не найден; дальнейшая синхронизация остановлена"
-                )
-
+            # Persist the Joomla identity before any post-create verification.
+            # The article already exists at this point, so losing its ID would
+            # make a retry create a duplicate instead of updating it.
             self.donor.article_id = article_id
             update_fields = ["article_id", "updated_at"]
             if saved_alias and saved_alias != self.donor.article_alias:
                 self.donor.article_alias = saved_alias
                 update_fields.append("article_alias")
             self.donor.save(update_fields=update_fields)
+
+            if not saved_form:
+                raise JoomlaArticleError(
+                    f"Материал создан как #{article_id} и привязан к донору, но Joomla не вернула форму для проверки"
+                )
+
+            editor = saved_form.select_one('[name="jform[articletext]"]')
+            saved_html = editor.decode_contents(formatter=None) if editor else ""
+            self._cancel_article(client, saved, saved_form)
+
+            if not has_managed_marker(saved_html, self.donor):
+                raise JoomlaArticleError(
+                    f"Материал #{article_id} создан и привязан к донору, но managed-marker после записи не найден; дальнейшая синхронизация остановлена"
+                )
+
             return f"Материал #{article_id} создан и принят под управление JPC"
 
     def adopt_article(self, article_id):
