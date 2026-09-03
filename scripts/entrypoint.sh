@@ -17,6 +17,6 @@ case "$(printf '%s' "${DEBUG:-0}" | tr '[:upper:]' '[:lower:]')" in
   *) python manage.py check --deploy ;;
 esac
 python manage.py migrate --noinput
+python scripts/build_joomla_connector.py
 python manage.py collectstatic --noinput
 exec gunicorn jpc.wsgi:application --bind 0.0.0.0:8000 --workers "${GUNICORN_WORKERS:-3}" --timeout 60 --access-logfile -
-
