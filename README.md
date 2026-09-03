@@ -1,13 +1,14 @@
 # Joomla Partners Control
 
-Внутренняя Django-система веб-студии для централизованного управления страницами «Наши партнёры» на Joomla 3/4/5. Система хранит доноров, клиентов и размещения, строит контролируемый HTML, показывает изолированный preview и журналирует работу с Joomla. Собственные Joomla-расширения на сайты не устанавливаются.
+Внутренняя Django-система веб-студии для централизованного управления страницами «Наши партнёры» на Joomla 3/4/5. Система хранит доноров, клиентов и размещения, строит контролируемый HTML, показывает изолированный preview и журналирует работу с Joomla. Для Joomla 3 доступны вход через administrator и защищённый JPC Connector, устанавливаемый из админки Joomla.
 
 ## Архитектура
 
 - `partners/models.py` — DonorSite, ClientSite, Placement, PageTemplate, PublicationLog и ArticleSnapshot.
 - `partners/services/page_renderer.py` — детерминированный renderer, CSS отдельно от body, SHA-256 и защитный `JPC-MANAGED-PAGE` marker.
 - `partners/services/credentials.py` — Fernet-шифрование паролей и API tokens ключом из environment.
-- `partners/joomla/` — отдельный HTML-адаптер Joomla 3 и общий Web Services API-адаптер Joomla 4/5. Все версии поддерживают чтение, безопасное принятие материала под управление, создание, обновление, marker verification и snapshots.
+- `partners/joomla/` — HTML-адаптер Joomla 3, token-адаптер JPC Connector и общий Web Services API-адаптер Joomla 4/5. Все версии поддерживают чтение, безопасное принятие материала под управление, создание, обновление, marker verification и snapshots.
+- `joomla_connector/plg_ajax_jpcconnector/` — исходники Joomla 3 Ajax-плагина; `scripts/build_joomla_connector.py` детерминированно собирает установочный ZIP.
 - `partners/views.py`, Django templates и vanilla JS — защищённый интерфейс, CRUD, переключатели, drag-and-drop и отдельное управление несколькими шаблонами страниц.
 - Django admin доступен как служебный интерфейс `/admin/`.
 - `.github/workflows/tests.yml` запускает Django checks, проверку миграций, `collectstatic` и тесты на push/PR.
@@ -51,7 +52,7 @@ docker compose exec web python manage.py seed_demo
 - `ALLOWED_HOSTS` должен содержать внешний домен панели.
 - `CSRF_TRUSTED_ORIGINS` должен содержать внешний origin с `https://`.
 
-Пароли и API tokens доноров находятся в PostgreSQL только в зашифрованных полях и не возвращаются в HTML форм или списков. Joomla API token передаётся только в заголовке `X-Joomla-Token`; redirects не следуются автоматически, а token удаляется из текстов API-ошибок.
+Пароли, Joomla API tokens и JPC Connector tokens доноров находятся в PostgreSQL только в зашифрованных полях и не возвращаются в HTML форм или списков. Joomla API token передаётся только в заголовке `X-Joomla-Token`, connector token — только в `X-JPC-Token`; redirects не следуются автоматически, а tokens удаляются из текстов ошибок.
 
 ### Reverse proxy и media
 
@@ -75,6 +76,26 @@ proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 git pull --ff-only origin main
 ./scripts/deploy.sh
 ```
+
+## Joomla 3: JPC Connector без доступа к хостингу
+
+Если защитная страница хостера перехватывает `/administrator/`, установите плагин из Joomla: на форме донора JPC есть ссылка «Скачать JPC Connector для Joomla 3».
+
+1. В Joomla откройте «Расширения → Менеджер расширений» и установите ZIP.
+2. Установщик автоматически включает Ajax-плагин и показывает случайный 64-символьный token. Скопируйте его.
+3. В доноре JPC выберите Joomla 3 и способ авторизации «JPC Connector (Joomla 3)», вставьте token и сохраните.
+4. `JPC Connector URL` обычно оставьте пустым: JPC использует `/index.php?option=com_ajax&plugin=jpcconnector&format=raw`.
+5. Нажмите «Проверить подключение». После первого успешного запроса Joomla заменит открытый token необратимым password hash; в JPC token остаётся зашифрованным.
+
+Плагин принимает только JSON с версией протокола, проверяет `X-JPC-Token`, ограничивает размер запроса, не следует redirect со стороны JPC и перед каждой записью сверяет SHA-256 прочитанной версии материала. Опционально в настройках плагина можно ограничить исходящий IP сервера JPC. Операции создания, принятия под управление и обновления также проверяют UUID managed-marker.
+
+Установочный пакет собирается командой:
+
+```bash
+python scripts/build_joomla_connector.py
+```
+
+Результат: `static/partners/downloads/plg_ajax_jpcconnector-1.0.0.zip`.
 
 ## Joomla 3: существующий материал
 
