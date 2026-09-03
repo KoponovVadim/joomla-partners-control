@@ -1,9 +1,16 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}{{ title }} · JPC{% endblock %}
 {% block content %}
 <div class="page-head"><div><a class="back" href="{% if kind == 'template' %}{% url 'template-list' %}{% else %}{% url 'dashboard' %}{% endif %}">← Назад</a><h1>{{ title }}</h1></div>{% if kind == 'donor' and object %}<span class="connection {{ object.connection_status }}"><i></i>{{ object.get_connection_status_display }}</span>{% endif %}</div>
 <div class="form-layout {% if kind == 'client' %}with-preview{% endif %}">
   <form method="post" enctype="multipart/form-data" class="panel form-panel">{% csrf_token %}
+    {% if kind == 'donor' %}
+    <div class="message info">
+      Нет доступа к хостингу Joomla 3? <a href="{% static 'partners/downloads/plg_ajax_jpcconnector-1.0.0.zip' %}"><strong>Скачать JPC Connector для Joomla 3</strong></a>,
+      установить ZIP через «Расширения → Менеджер расширений», затем выбрать способ авторизации «JPC Connector» и вставить выданный token.
+    </div>
+    {% endif %}
     {% if form.non_field_errors %}<div class="message error">{{ form.non_field_errors }}</div>{% endif %}
     <div class="form-grid">
     {% for field in form %}
